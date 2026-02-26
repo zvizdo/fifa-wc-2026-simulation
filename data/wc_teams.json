@@ -1,0 +1,1010 @@
+{
+    "1994": {
+        "Saudi Arabia": {
+            "confederation": "AFC",
+            "rank": 34
+        },
+        "South Korea": {
+            "confederation": "AFC",
+            "rank": 37
+        },
+        "Cameroon": {
+            "confederation": "CAF",
+            "rank": 24
+        },
+        "Morocco": {
+            "confederation": "CAF",
+            "rank": 28
+        },
+        "Nigeria": {
+            "confederation": "CAF",
+            "rank": 11
+        },
+        "Mexico": {
+            "confederation": "CONCACAF",
+            "rank": 16
+        },
+        "United States": {
+            "confederation": "CONCACAF",
+            "rank": 23
+        },
+        "Argentina": {
+            "confederation": "CONMEBOL",
+            "rank": 8
+        },
+        "Bolivia": {
+            "confederation": "CONMEBOL",
+            "rank": 43
+        },
+        "Brazil": {
+            "confederation": "CONMEBOL",
+            "rank": 3
+        },
+        "Colombia": {
+            "confederation": "CONMEBOL",
+            "rank": 17
+        },
+        "Belgium": {
+            "confederation": "UEFA",
+            "rank": 27
+        },
+        "Bulgaria": {
+            "confederation": "UEFA",
+            "rank": 29
+        },
+        "Germany": {
+            "confederation": "UEFA",
+            "rank": 1
+        },
+        "Greece": {
+            "confederation": "UEFA",
+            "rank": 31
+        },
+        "Italy": {
+            "confederation": "UEFA",
+            "rank": 4
+        },
+        "Netherlands": {
+            "confederation": "UEFA",
+            "rank": 2
+        },
+        "Norway": {
+            "confederation": "UEFA",
+            "rank": 6
+        },
+        "Ireland": {
+            "confederation": "UEFA",
+            "rank": 14
+        },
+        "Romania": {
+            "confederation": "UEFA",
+            "rank": 7
+        },
+        "Russia": {
+            "confederation": "UEFA",
+            "rank": 19
+        },
+        "Spain": {
+            "confederation": "UEFA",
+            "rank": 5
+        },
+        "Sweden": {
+            "confederation": "UEFA",
+            "rank": 10
+        },
+        "Switzerland": {
+            "confederation": "UEFA",
+            "rank": 12
+        }
+    },
+    "1998": {
+        "Iran": {
+            "confederation": "AFC",
+            "rank": 42
+        },
+        "Japan": {
+            "confederation": "AFC",
+            "rank": 12
+        },
+        "Saudi Arabia": {
+            "confederation": "AFC",
+            "rank": 34
+        },
+        "South Korea": {
+            "confederation": "AFC",
+            "rank": 20
+        },
+        "Cameroon": {
+            "confederation": "CAF",
+            "rank": 49
+        },
+        "Morocco": {
+            "confederation": "CAF",
+            "rank": 13
+        },
+        "Nigeria": {
+            "confederation": "CAF",
+            "rank": 74
+        },
+        "South Africa": {
+            "confederation": "CAF",
+            "rank": 24
+        },
+        "Tunisia": {
+            "confederation": "CAF",
+            "rank": 21
+        },
+        "Jamaica": {
+            "confederation": "CONCACAF",
+            "rank": 30
+        },
+        "Mexico": {
+            "confederation": "CONCACAF",
+            "rank": 4
+        },
+        "United States": {
+            "confederation": "CONCACAF",
+            "rank": 11
+        },
+        "Argentina": {
+            "confederation": "CONMEBOL",
+            "rank": 6
+        },
+        "Brazil": {
+            "confederation": "CONMEBOL",
+            "rank": 1
+        },
+        "Chile": {
+            "confederation": "CONMEBOL",
+            "rank": 9
+        },
+        "Colombia": {
+            "confederation": "CONMEBOL",
+            "rank": 10
+        },
+        "Paraguay": {
+            "confederation": "CONMEBOL",
+            "rank": 29
+        },
+        "Austria": {
+            "confederation": "UEFA",
+            "rank": 31
+        },
+        "Belgium": {
+            "confederation": "UEFA",
+            "rank": 36
+        },
+        "Bulgaria": {
+            "confederation": "UEFA",
+            "rank": 35
+        },
+        "Croatia": {
+            "confederation": "UEFA",
+            "rank": 19
+        },
+        "Denmark": {
+            "confederation": "UEFA",
+            "rank": 27
+        },
+        "England": {
+            "confederation": "UEFA",
+            "rank": 5
+        },
+        "France": {
+            "confederation": "UEFA",
+            "rank": 1
+        },
+        "Germany": {
+            "confederation": "UEFA",
+            "rank": 2
+        },
+        "Italy": {
+            "confederation": "UEFA",
+            "rank": 14
+        },
+        "Netherlands": {
+            "confederation": "UEFA",
+            "rank": 25
+        },
+        "Norway": {
+            "confederation": "UEFA",
+            "rank": 7
+        },
+        "Romania": {
+            "confederation": "UEFA",
+            "rank": 22
+        },
+        "Scotland": {
+            "confederation": "UEFA",
+            "rank": 41
+        },
+        "Spain": {
+            "confederation": "UEFA",
+            "rank": 15
+        },
+        "FR Yugoslavia": {
+            "confederation": "UEFA",
+            "rank": 8
+        }
+    },
+    "2002": {
+        "China": {
+            "confederation": "AFC",
+            "rank": 50
+        },
+        "Japan": {
+            "confederation": "AFC",
+            "rank": 1
+        },
+        "Saudi Arabia": {
+            "confederation": "AFC",
+            "rank": 34
+        },
+        "South Korea": {
+            "confederation": "AFC",
+            "rank": 1
+        },
+        "Cameroon": {
+            "confederation": "CAF",
+            "rank": 17
+        },
+        "Nigeria": {
+            "confederation": "CAF",
+            "rank": 27
+        },
+        "Senegal": {
+            "confederation": "CAF",
+            "rank": 42
+        },
+        "South Africa": {
+            "confederation": "CAF",
+            "rank": 37
+        },
+        "Tunisia": {
+            "confederation": "CAF",
+            "rank": 31
+        },
+        "Costa Rica": {
+            "confederation": "CONCACAF",
+            "rank": 29
+        },
+        "Mexico": {
+            "confederation": "CONCACAF",
+            "rank": 7
+        },
+        "United States": {
+            "confederation": "CONCACAF",
+            "rank": 13
+        },
+        "Argentina": {
+            "confederation": "CONMEBOL",
+            "rank": 3
+        },
+        "Brazil": {
+            "confederation": "CONMEBOL",
+            "rank": 2
+        },
+        "Ecuador": {
+            "confederation": "CONMEBOL",
+            "rank": 36
+        },
+        "Paraguay": {
+            "confederation": "CONMEBOL",
+            "rank": 18
+        },
+        "Uruguay": {
+            "confederation": "CONMEBOL",
+            "rank": 24
+        },
+        "Belgium": {
+            "confederation": "UEFA",
+            "rank": 23
+        },
+        "Croatia": {
+            "confederation": "UEFA",
+            "rank": 21
+        },
+        "Denmark": {
+            "confederation": "UEFA",
+            "rank": 20
+        },
+        "England": {
+            "confederation": "UEFA",
+            "rank": 12
+        },
+        "France": {
+            "confederation": "UEFA",
+            "rank": 1
+        },
+        "Germany": {
+            "confederation": "UEFA",
+            "rank": 11
+        },
+        "Italy": {
+            "confederation": "UEFA",
+            "rank": 6
+        },
+        "Poland": {
+            "confederation": "UEFA",
+            "rank": 38
+        },
+        "Portugal": {
+            "confederation": "UEFA",
+            "rank": 5
+        },
+        "Ireland": {
+            "confederation": "UEFA",
+            "rank": 15
+        },
+        "Russia": {
+            "confederation": "UEFA",
+            "rank": 28
+        },
+        "Slovenia": {
+            "confederation": "UEFA",
+            "rank": 25
+        },
+        "Spain": {
+            "confederation": "UEFA",
+            "rank": 8
+        },
+        "Sweden": {
+            "confederation": "UEFA",
+            "rank": 19
+        },
+        "Turkey": {
+            "confederation": "UEFA",
+            "rank": 22
+        }
+    },
+    "2006": {
+        "Iran": {
+            "confederation": "AFC",
+            "rank": 23
+        },
+        "Japan": {
+            "confederation": "AFC",
+            "rank": 18
+        },
+        "Saudi Arabia": {
+            "confederation": "AFC",
+            "rank": 34
+        },
+        "South Korea": {
+            "confederation": "AFC",
+            "rank": 29
+        },
+        "Angola": {
+            "confederation": "CAF",
+            "rank": 57
+        },
+        "Ghana": {
+            "confederation": "CAF",
+            "rank": 48
+        },
+        "Ivory Coast": {
+            "confederation": "CAF",
+            "rank": 32
+        },
+        "Togo": {
+            "confederation": "CAF",
+            "rank": 61
+        },
+        "Tunisia": {
+            "confederation": "CAF",
+            "rank": 21
+        },
+        "Costa Rica": {
+            "confederation": "CONCACAF",
+            "rank": 26
+        },
+        "Mexico": {
+            "confederation": "CONCACAF",
+            "rank": 4
+        },
+        "Trinidad and Tobago": {
+            "confederation": "CONCACAF",
+            "rank": 47
+        },
+        "United States": {
+            "confederation": "CONCACAF",
+            "rank": 5
+        },
+        "Argentina": {
+            "confederation": "CONMEBOL",
+            "rank": 9
+        },
+        "Brazil": {
+            "confederation": "CONMEBOL",
+            "rank": 1
+        },
+        "Ecuador": {
+            "confederation": "CONMEBOL",
+            "rank": 39
+        },
+        "Paraguay": {
+            "confederation": "CONMEBOL",
+            "rank": 33
+        },
+        "Australia": {
+            "confederation": "AFC",
+            "rank": 42
+        },
+        "Croatia": {
+            "confederation": "UEFA",
+            "rank": 23
+        },
+        "Czech Republic": {
+            "confederation": "UEFA",
+            "rank": 2
+        },
+        "England": {
+            "confederation": "UEFA",
+            "rank": 10
+        },
+        "France": {
+            "confederation": "UEFA",
+            "rank": 8
+        },
+        "Germany": {
+            "confederation": "UEFA",
+            "rank": 19
+        },
+        "Italy": {
+            "confederation": "UEFA",
+            "rank": 13
+        },
+        "Netherlands": {
+            "confederation": "UEFA",
+            "rank": 3
+        },
+        "Poland": {
+            "confederation": "UEFA",
+            "rank": 29
+        },
+        "Portugal": {
+            "confederation": "UEFA",
+            "rank": 7
+        },
+        "Serbia and Montenegro": {
+            "confederation": "UEFA",
+            "rank": 44
+        },
+        "Spain": {
+            "confederation": "UEFA",
+            "rank": 5
+        },
+        "Sweden": {
+            "confederation": "UEFA",
+            "rank": 16
+        },
+        "Switzerland": {
+            "confederation": "UEFA",
+            "rank": 35
+        },
+        "Ukraine": {
+            "confederation": "UEFA",
+            "rank": 45
+        }
+    },
+    "2010": {
+        "Australia": {
+            "confederation": "AFC",
+            "rank": 20
+        },
+        "Japan": {
+            "confederation": "AFC",
+            "rank": 45
+        },
+        "North Korea": {
+            "confederation": "AFC",
+            "rank": 105
+        },
+        "South Korea": {
+            "confederation": "AFC",
+            "rank": 47
+        },
+        "Algeria": {
+            "confederation": "CAF",
+            "rank": 30
+        },
+        "Cameroon": {
+            "confederation": "CAF",
+            "rank": 19
+        },
+        "Ghana": {
+            "confederation": "CAF",
+            "rank": 32
+        },
+        "Ivory Coast": {
+            "confederation": "CAF",
+            "rank": 27
+        },
+        "Nigeria": {
+            "confederation": "CAF",
+            "rank": 21
+        },
+        "South Africa": {
+            "confederation": "CAF",
+            "rank": 83
+        },
+        "Honduras": {
+            "confederation": "CONCACAF",
+            "rank": 38
+        },
+        "Mexico": {
+            "confederation": "CONCACAF",
+            "rank": 17
+        },
+        "United States": {
+            "confederation": "CONCACAF",
+            "rank": 14
+        },
+        "Argentina": {
+            "confederation": "CONMEBOL",
+            "rank": 7
+        },
+        "Brazil": {
+            "confederation": "CONMEBOL",
+            "rank": 1
+        },
+        "Chile": {
+            "confederation": "CONMEBOL",
+            "rank": 18
+        },
+        "Paraguay": {
+            "confederation": "CONMEBOL",
+            "rank": 31
+        },
+        "Uruguay": {
+            "confederation": "CONMEBOL",
+            "rank": 16
+        },
+        "New Zealand": {
+            "confederation": "OFC",
+            "rank": 78
+        },
+        "Denmark": {
+            "confederation": "UEFA",
+            "rank": 36
+        },
+        "England": {
+            "confederation": "UEFA",
+            "rank": 8
+        },
+        "France": {
+            "confederation": "UEFA",
+            "rank": 9
+        },
+        "Germany": {
+            "confederation": "UEFA",
+            "rank": 6
+        },
+        "Greece": {
+            "confederation": "UEFA",
+            "rank": 13
+        },
+        "Italy": {
+            "confederation": "UEFA",
+            "rank": 5
+        },
+        "Netherlands": {
+            "confederation": "UEFA",
+            "rank": 4
+        },
+        "Portugal": {
+            "confederation": "UEFA",
+            "rank": 3
+        },
+        "Serbia": {
+            "confederation": "UEFA",
+            "rank": 15
+        },
+        "Slovakia": {
+            "confederation": "UEFA",
+            "rank": 34
+        },
+        "Slovenia": {
+            "confederation": "UEFA",
+            "rank": 25
+        },
+        "Spain": {
+            "confederation": "UEFA",
+            "rank": 2
+        },
+        "Switzerland": {
+            "confederation": "UEFA",
+            "rank": 24
+        }
+    },
+    "2014": {
+        "Australia": {
+            "confederation": "AFC",
+            "rank": 62
+        },
+        "Iran": {
+            "confederation": "AFC",
+            "rank": 43
+        },
+        "Japan": {
+            "confederation": "AFC",
+            "rank": 46
+        },
+        "South Korea": {
+            "confederation": "AFC",
+            "rank": 57
+        },
+        "Algeria": {
+            "confederation": "CAF",
+            "rank": 22
+        },
+        "Cameroon": {
+            "confederation": "CAF",
+            "rank": 56
+        },
+        "Ghana": {
+            "confederation": "CAF",
+            "rank": 37
+        },
+        "Ivory Coast": {
+            "confederation": "CAF",
+            "rank": 23
+        },
+        "Nigeria": {
+            "confederation": "CAF",
+            "rank": 44
+        },
+        "Costa Rica": {
+            "confederation": "CONCACAF",
+            "rank": 28
+        },
+        "Honduras": {
+            "confederation": "CONCACAF",
+            "rank": 33
+        },
+        "Mexico": {
+            "confederation": "CONCACAF",
+            "rank": 20
+        },
+        "United States": {
+            "confederation": "CONCACAF",
+            "rank": 13
+        },
+        "Argentina": {
+            "confederation": "CONMEBOL",
+            "rank": 5
+        },
+        "Brazil": {
+            "confederation": "CONMEBOL",
+            "rank": 3
+        },
+        "Chile": {
+            "confederation": "CONMEBOL",
+            "rank": 14
+        },
+        "Colombia": {
+            "confederation": "CONMEBOL",
+            "rank": 8
+        },
+        "Ecuador": {
+            "confederation": "CONMEBOL",
+            "rank": 26
+        },
+        "Uruguay": {
+            "confederation": "CONMEBOL",
+            "rank": 7
+        },
+        "Belgium": {
+            "confederation": "UEFA",
+            "rank": 11
+        },
+        "Bosnia and Herzegovina": {
+            "confederation": "UEFA",
+            "rank": 21
+        },
+        "Croatia": {
+            "confederation": "UEFA",
+            "rank": 18
+        },
+        "England": {
+            "confederation": "UEFA",
+            "rank": 10
+        },
+        "France": {
+            "confederation": "UEFA",
+            "rank": 17
+        },
+        "Germany": {
+            "confederation": "UEFA",
+            "rank": 2
+        },
+        "Greece": {
+            "confederation": "UEFA",
+            "rank": 12
+        },
+        "Italy": {
+            "confederation": "UEFA",
+            "rank": 9
+        },
+        "Netherlands": {
+            "confederation": "UEFA",
+            "rank": 15
+        },
+        "Portugal": {
+            "confederation": "UEFA",
+            "rank": 4
+        },
+        "Russia": {
+            "confederation": "UEFA",
+            "rank": 19
+        },
+        "Spain": {
+            "confederation": "UEFA",
+            "rank": 1
+        },
+        "Switzerland": {
+            "confederation": "UEFA",
+            "rank": 6
+        }
+    },
+    "2018": {
+        "Australia": {
+            "confederation": "AFC",
+            "rank": 36
+        },
+        "Iran": {
+            "confederation": "AFC",
+            "rank": 37
+        },
+        "Japan": {
+            "confederation": "AFC",
+            "rank": 61
+        },
+        "Saudi Arabia": {
+            "confederation": "AFC",
+            "rank": 67
+        },
+        "South Korea": {
+            "confederation": "AFC",
+            "rank": 57
+        },
+        "Egypt": {
+            "confederation": "CAF",
+            "rank": 45
+        },
+        "Morocco": {
+            "confederation": "CAF",
+            "rank": 41
+        },
+        "Nigeria": {
+            "confederation": "CAF",
+            "rank": 48
+        },
+        "Senegal": {
+            "confederation": "CAF",
+            "rank": 27
+        },
+        "Tunisia": {
+            "confederation": "CAF",
+            "rank": 21
+        },
+        "Costa Rica": {
+            "confederation": "CONCACAF",
+            "rank": 23
+        },
+        "Mexico": {
+            "confederation": "CONCACAF",
+            "rank": 15
+        },
+        "Panama": {
+            "confederation": "CONCACAF",
+            "rank": 55
+        },
+        "Argentina": {
+            "confederation": "CONMEBOL",
+            "rank": 5
+        },
+        "Brazil": {
+            "confederation": "CONMEBOL",
+            "rank": 2
+        },
+        "Colombia": {
+            "confederation": "CONMEBOL",
+            "rank": 16
+        },
+        "Peru": {
+            "confederation": "CONMEBOL",
+            "rank": 11
+        },
+        "Uruguay": {
+            "confederation": "CONMEBOL",
+            "rank": 14
+        },
+        "Belgium": {
+            "confederation": "UEFA",
+            "rank": 3
+        },
+        "Croatia": {
+            "confederation": "UEFA",
+            "rank": 20
+        },
+        "Denmark": {
+            "confederation": "UEFA",
+            "rank": 12
+        },
+        "England": {
+            "confederation": "UEFA",
+            "rank": 12
+        },
+        "France": {
+            "confederation": "UEFA",
+            "rank": 7
+        },
+        "Germany": {
+            "confederation": "UEFA",
+            "rank": 1
+        },
+        "Iceland": {
+            "confederation": "UEFA",
+            "rank": 22
+        },
+        "Poland": {
+            "confederation": "UEFA",
+            "rank": 8
+        },
+        "Portugal": {
+            "confederation": "UEFA",
+            "rank": 4
+        },
+        "Russia": {
+            "confederation": "UEFA",
+            "rank": 70
+        },
+        "Serbia": {
+            "confederation": "UEFA",
+            "rank": 34
+        },
+        "Spain": {
+            "confederation": "UEFA",
+            "rank": 10
+        },
+        "Sweden": {
+            "confederation": "UEFA",
+            "rank": 24
+        },
+        "Switzerland": {
+            "confederation": "UEFA",
+            "rank": 6
+        }
+    },
+    "2022": {
+        "Australia": {
+            "confederation": "AFC",
+            "rank": 38
+        },
+        "Iran": {
+            "confederation": "AFC",
+            "rank": 20
+        },
+        "Japan": {
+            "confederation": "AFC",
+            "rank": 24
+        },
+        "Qatar": {
+            "confederation": "AFC",
+            "rank": 50
+        },
+        "Saudi Arabia": {
+            "confederation": "AFC",
+            "rank": 51
+        },
+        "South Korea": {
+            "confederation": "AFC",
+            "rank": 28
+        },
+        "Cameroon": {
+            "confederation": "CAF",
+            "rank": 43
+        },
+        "Ghana": {
+            "confederation": "CAF",
+            "rank": 61
+        },
+        "Morocco": {
+            "confederation": "CAF",
+            "rank": 22
+        },
+        "Senegal": {
+            "confederation": "CAF",
+            "rank": 18
+        },
+        "Tunisia": {
+            "confederation": "CAF",
+            "rank": 30
+        },
+        "Canada": {
+            "confederation": "CONCACAF",
+            "rank": 41
+        },
+        "Costa Rica": {
+            "confederation": "CONCACAF",
+            "rank": 31
+        },
+        "Mexico": {
+            "confederation": "CONCACAF",
+            "rank": 13
+        },
+        "United States": {
+            "confederation": "CONCACAF",
+            "rank": 16
+        },
+        "Argentina": {
+            "confederation": "CONMEBOL",
+            "rank": 3
+        },
+        "Brazil": {
+            "confederation": "CONMEBOL",
+            "rank": 1
+        },
+        "Ecuador": {
+            "confederation": "CONMEBOL",
+            "rank": 44
+        },
+        "Uruguay": {
+            "confederation": "CONMEBOL",
+            "rank": 14
+        },
+        "Belgium": {
+            "confederation": "UEFA",
+            "rank": 2
+        },
+        "Croatia": {
+            "confederation": "UEFA",
+            "rank": 12
+        },
+        "Denmark": {
+            "confederation": "UEFA",
+            "rank": 10
+        },
+        "England": {
+            "confederation": "UEFA",
+            "rank": 5
+        },
+        "France": {
+            "confederation": "UEFA",
+            "rank": 4
+        },
+        "Germany": {
+            "confederation": "UEFA",
+            "rank": 11
+        },
+        "Netherlands": {
+            "confederation": "UEFA",
+            "rank": 8
+        },
+        "Poland": {
+            "confederation": "UEFA",
+            "rank": 26
+        },
+        "Portugal": {
+            "confederation": "UEFA",
+            "rank": 9
+        },
+        "Serbia": {
+            "confederation": "UEFA",
+            "rank": 21
+        },
+        "Spain": {
+            "confederation": "UEFA",
+            "rank": 7
+        },
+        "Switzerland": {
+            "confederation": "UEFA",
+            "rank": 15
+        },
+        "Wales": {
+            "confederation": "UEFA",
+            "rank": 19
+        }
+    }
+}
