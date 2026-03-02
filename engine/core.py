@@ -31,6 +31,10 @@ class Team:
         self.group: Optional['Group'] = None
         self.matches: List['Match'] = []
 
+        self.current_rank = fifa_rank
+        self.current_off_rank = fifa_rank
+        self.current_def_rank = fifa_rank   
+
     def assign_group(self, group: 'Group'):
         """Assign this team to a group."""
         self.group = group
@@ -84,8 +88,11 @@ class Team:
         return stats
 
     def reset_matches(self):
-        """Clear all match history (useful for re-running simulations)."""
+        """Clear all match history and reset dynamic ranks."""
         self.matches = []
+        self.current_rank = self.fifa_rank
+        self.current_off_rank = self.fifa_rank
+        self.current_def_rank = self.fifa_rank
 
     def __repr__(self):
         return f"Team({self.name}, {self.confederation}, rank={self.fifa_rank})"

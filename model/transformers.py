@@ -50,7 +50,8 @@ class FullFeatureTransformer(BaseEstimator, TransformerMixin):
         - is_strong_confed:   passthrough [if include_confed]
         - opp_is_strong_confed: passthrough [if include_confed]
         - rest_diff:          passthrough [if include_rest]
-        - matches_played:     passthrough [if include_matches_played]
+        - stage_weight:       passthrough [if include_stage_weight]
+                              0=group stage, 1=R16/QF/3rd-place, 2=SF/final
     """
 
     # Column index constants
@@ -68,16 +69,16 @@ class FullFeatureTransformer(BaseEstimator, TransformerMixin):
     IS_STRONG_CONFED = 11
     OPP_IS_STRONG_CONFED = 12
     REST_DIFF = 13
-    MATCHES_PLAYED = 14
+    STAGE_WEIGHT = 14
 
     def __init__(self, shape=0.625, include_off_def=True,
                  include_confed=True, include_rest=True,
-                 include_matches_played=True):
+                 include_stage_weight=True):
         self.shape = shape
         self.include_off_def = include_off_def
         self.include_confed = include_confed
         self.include_rest = include_rest
-        self.include_matches_played = include_matches_played
+        self.include_stage_weight = include_stage_weight
 
     def fit(self, X, y=None):
         return self
@@ -115,8 +116,8 @@ class FullFeatureTransformer(BaseEstimator, TransformerMixin):
         if self.include_rest:
             features.append(X[:, self.REST_DIFF])
 
-        # Tournament stage proxy
-        if self.include_matches_played:
-            features.append(X[:, self.MATCHES_PLAYED])
+        # Competition stage weight (0=group, 1=R16/QF/3rd, 2=SF/final)
+        if self.include_stage_weight:
+            features.append(X[:, self.STAGE_WEIGHT])
 
         return np.column_stack(features)

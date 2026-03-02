@@ -16,7 +16,7 @@ from multiprocessing import cpu_count
 from tqdm import tqdm
 
 from engine import Competition
-from engine.match import WinExpMatch
+from engine.match import ModeledMatch
 
 CHUNK_SIZE = 75
 
@@ -35,7 +35,7 @@ def _run_chunk(args):
                 if team["name"] == country:
                     team["fifa_rank"] = rank
 
-        comp = Competition(teams_data=data, match_class=WinExpMatch)
+        comp = Competition(teams_data=data, match_class=ModeledMatch)
         comp.simulate()
         m, s, t = comp.extract_rows(f"rank_{country}_{i}_{rank}")
         all_match.extend(m)

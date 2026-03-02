@@ -16,7 +16,7 @@ def build_baseline_pipeline(shape=0.625, alpha=0.000253, max_iter=711):
 
 def build_full_pipeline(shape=0.625, alpha=0.000253, max_iter=711,
                         include_off_def=True, include_confed=True,
-                        include_rest=True, include_matches_played=True):
+                        include_rest=True, include_stage_weight=True):
     """Full multi-feature pipeline with configurable feature groups."""
     return Pipeline([
         ("features", FullFeatureTransformer(
@@ -24,7 +24,7 @@ def build_full_pipeline(shape=0.625, alpha=0.000253, max_iter=711,
             include_off_def=include_off_def,
             include_confed=include_confed,
             include_rest=include_rest,
-            include_matches_played=include_matches_played,
+            include_stage_weight=include_stage_weight,
         )),
         ("poisson", PoissonRegressor(alpha=alpha, max_iter=max_iter)),
     ])

@@ -8,7 +8,7 @@ from multiprocessing import cpu_count
 from tqdm import tqdm
 
 from engine import Competition
-from engine.match import WinExpMatch
+from engine.match import ModeledMatch
 
 CHUNK_SIZE = 50
 
@@ -20,7 +20,7 @@ def _run_chunk(args):
     all_stand = []
     all_third = []
     for i in range(start, start + count):
-        comp = Competition(teams_data=teams_data, match_class=WinExpMatch)
+        comp = Competition(teams_data=teams_data, match_class=ModeledMatch)
         comp.simulate()
         m, s, t = comp.extract_rows(f"general_{i}")
         all_match.extend(m)

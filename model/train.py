@@ -35,7 +35,7 @@ FEATURE_COLUMNS = [
     "host",
     "is_strong_confed", "opp_is_strong_confed",
     "rest_diff",
-    "matches_played",
+    "stage_weight",
 ]
 
 

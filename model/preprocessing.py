@@ -234,4 +234,16 @@ def process_tournament_history(df_base, shape=1.5, k_mul=5,
         df_sorted["opp_confederation"].isin(STRONG_CONFEDS).astype(int)
     )
 
+    # Stage weight: 0 = group stage, 1 = round of 16 / quarter-finals / third-place,
+    # 2 = semi-finals / final
+    stage_map = {
+        "group stage": 0,
+        "round of 16": 1,
+        "quarter-finals": 1,
+        "third-place match": 1,
+        "semi-finals": 2,
+        "final": 2,
+    }
+    df_sorted["stage_weight"] = df_sorted["stage_name"].map(stage_map).fillna(1).astype(int)
+
     return df_sorted

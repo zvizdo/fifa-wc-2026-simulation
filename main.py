@@ -1,8 +1,8 @@
 from engine import Competition, STAGE
-from engine.match import WinExpMatch
+from engine.match import ModeledMatch
 
 comp = Competition.from_json_file(
-    "data/wc_2026_teams.json", match_class=WinExpMatch, random_seed=42
+    "data/wc_2026_teams.json", match_class=ModeledMatch #, random_seed=42
 )
 champion = comp.simulate()
 comp.print_results()
