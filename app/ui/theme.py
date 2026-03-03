@@ -36,7 +36,19 @@ section[data-testid="stSidebar"] {
 
 /* ===== Hide default Streamlit elements for cleaner look ===== */
 #MainMenu {visibility: hidden;}
-header[data-testid="stHeader"] {background: transparent;}
+header[data-testid="stHeader"],
+[data-testid="stToolbar"],
+.stAppToolbar {
+    background: transparent !important;
+    pointer-events: none !important; /* Allow clicks to pass through to custom nav */
+}
+/* Re-enable pointer events for the important header buttons (Menu & Deploy) */
+button[data-testid="stHeaderMenu"], 
+.stDeployButton,
+[data-testid="stToolbar"] button,
+[data-testid="stAppDeployButton"] {
+    pointer-events: auto !important;
+}
 
 /* ===== Reduce default Streamlit top padding & divider spacing ===== */
 [data-testid="stMainBlockContainer"] {
@@ -73,44 +85,96 @@ a[data-testid="stPageLink-NavLink"] span {
 }
 
 /* ===== Desktop nav bar ===== */
-/* Pure HTML <nav> inside the container — no Streamlit column quirks */
-.wc-navbar {
-    display: flex;
-    align-items: center;
-    background: linear-gradient(135deg, var(--wc-dark) 0%, #162236 100%);
-    border-radius: 14px;
-    padding: 0 1rem;
-    height: 54px;
-    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.22);
+/* Native Streamlit page links styled as a horizontal navbar */
+.st-key-desktop_nav {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    background: linear-gradient(135deg, var(--wc-dark) 0%, #162236 100%) !important;
+    border-radius: 14px !important;
+    padding: 0 1rem !important;
+    height: 54px !important;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.22) !important;
+    gap: 0.25rem !important;
+    width: 100% !important;
+    position: relative !important;
+    z-index: 999999 !important;
 }
+
+/* Ensure brand text is pushed to the left by letting it grow */
+.st-key-desktop_nav .stElementContainer:first-child {
+    margin-right: auto !important;
+    flex-grow: 1 !important;
+    width: auto !important;
+    margin: 0 !important;
+}
+
+/* Zero out Streamlit's default markdown margins to center brand text */
+.st-key-desktop_nav div.stMarkdown,
+.st-key-desktop_nav [data-testid="stMarkdownContainer"] {
+    margin: 0 !important;
+    padding: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+}
+
+/* Base element container sizing for children */
+.st-key-desktop_nav .stElementContainer,
+.st-key-desktop_nav div[data-testid="stPageLink"] {
+    width: auto !important;
+    height: 40px !important; /* Fit comfortably within the 54px navbar */
+    margin: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+}
+
 .wc-nav-brand {
-    color: var(--wc-gold);
-    font-weight: 800;
-    font-size: 1rem;
-    letter-spacing: 0.4px;
-    white-space: nowrap;
-    flex: 2;
+    color: var(--wc-gold) !important;
+    font-weight: 800 !important;
+    font-size: 1rem !important;
+    letter-spacing: 0.4px !important;
+    white-space: nowrap !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    display: flex !important;
+    align-items: center !important;
 }
-.wc-nav-links {
-    display: flex;
-    gap: 0.25rem;
-    justify-content: flex-end;
-    flex: 3;
-}
-.wc-nav-link {
+
+/* Clean up Desktop Page Links to look like nav buttons */
+.st-key-desktop_nav a[data-testid="stPageLink-NavLink"] {
+    height: 100% !important;
+    display: flex !important;
+    align-items: center !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
     color: rgba(240, 244, 248, 0.82) !important;
-    font-weight: 600;
-    font-size: 0.92rem;
-    letter-spacing: 0.2px;
-    text-decoration: none !important;
-    padding: 0.45rem 1rem;
-    border-radius: 10px;
-    transition: background 0.2s ease, color 0.2s ease;
-    white-space: nowrap;
+    font-weight: 600 !important;
+    font-size: 0.92rem !important;
+    letter-spacing: 0.2px !important;
+    padding: 0 1.25rem !important;
+    border-radius: 10px !important;
+    transition: background 0.2s ease, color 0.2s ease !important;
+    white-space: nowrap !important;
 }
-.wc-nav-link:hover {
+
+.st-key-desktop_nav a[data-testid="stPageLink-NavLink"]:hover {
     background: rgba(0, 180, 216, 0.15) !important;
     color: var(--wc-turquoise) !important;
+    border: none !important;
+    transform: none !important;
+    box-shadow: none !important;
+}
+
+/* Ensure hit-testing ALWAYS falls to the parent a tag, preventing the inner text from blocking hover overrides */
+.st-key-desktop_nav a[data-testid="stPageLink-NavLink"] * {
+    pointer-events: none !important;
+}
+
+/* Reset inner p/span in desktop links */
+.st-key-desktop_nav a[data-testid="stPageLink-NavLink"] p,
+.st-key-desktop_nav a[data-testid="stPageLink-NavLink"] span {
+    color: inherit !important;
 }
 
 /* ===== Mobile nav bar ===== */
@@ -163,12 +227,31 @@ button[data-testid="stBaseButton-pillsActive"] p {
     color: #FFFFFF !important;
 }
 button[data-testid="stBaseButton-pills"] {
+    background-color: var(--wc-card-bg) !important;
     color: var(--wc-dark) !important;
     border-color: #D1D5DB !important;
+}
+button[data-testid="stBaseButton-pills"] p {
+    color: var(--wc-dark) !important;
 }
 button[data-testid="stBaseButton-pills"]:hover {
     border-color: var(--wc-turquoise) !important;
     color: var(--wc-turquoise) !important;
+}
+button[data-testid="stBaseButton-pills"]:hover p {
+    color: var(--wc-turquoise) !important;
+}
+
+/* ===== Radio Buttons ===== */
+[data-testid="stRadio"] label,
+[data-testid="stRadio"] p,
+[data-testid="stRadio"] span {
+    color: var(--wc-dark) !important;
+}
+[data-testid="stRadio"] div[role="radiogroup"] {
+    background-color: var(--wc-card-bg) !important;
+    padding: 0.2rem 0.5rem;
+    border-radius: 8px;
 }
 
 /* ===== Navigation visibility ===== */

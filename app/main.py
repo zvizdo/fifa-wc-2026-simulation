@@ -28,23 +28,14 @@ pg = st.navigation(pages, position="hidden")
 
 # ── Navigation ───────────────────────────────────────────────────────────────
 
-# Desktop Navigation — pure HTML nav so we own the layout entirely.
+# Desktop Navigation — native Streamlit page links styled horizontally via CSS
 # Hidden on mobile via CSS (.st-key-desktop_nav).
 with st.container(key="desktop_nav"):
-    st.markdown(
-        """
-    <nav class="wc-navbar">
-        <div class="wc-nav-brand">🏆 FIFA WC 2026</div>
-        <div class="wc-nav-links">
-            <a href="" class="wc-nav-link">🏆 Home</a>
-            <a href="competition" class="wc-nav-link">📊 Competition</a>
-            <a href="team" class="wc-nav-link">⚽ Teams</a>
-            <a href="city" class="wc-nav-link">🏙️ City</a>
-        </div>
-    </nav>
-    """,
-        unsafe_allow_html=True,
-    )
+    st.markdown("<div class='wc-nav-brand'>🏆 FIFA WC 2026</div>", unsafe_allow_html=True)
+    st.page_link("pages/landing.py", label="🏆 Home")
+    st.page_link("pages/competition.py", label="📊 Competition")
+    st.page_link("pages/team.py", label="⚽ Teams")
+    st.page_link("pages/city.py", label="🏙️ City")
 
 # Mobile Navigation (Hamburger / Expander) — hidden on desktop via CSS (.st-key-mobile_nav)
 with st.container(key="mobile_nav"):
