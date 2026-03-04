@@ -142,10 +142,12 @@ def get_all_groups_most_likely() -> pd.DataFrame:
 
 @st.cache_data
 def get_group_most_likely_standings(group_name: str, team_order: str) -> list[dict]:
-    """MODE-based stats for a specific group ordering.
+    """Most representative stats for a specific group ordering.
 
-    Finds all sims that produced the given team_order for the group, then
-    computes MODE(points), MODE(goal_difference), etc. per position/team.
+    Finds all sims that produced the given team_order for the group. Instead of independent
+    MODE calculations (which can lead to mathematically impossible combinations like 9, 6, 3, 1 points),
+    it identifies the most frequent points distribution, then the most frequent goal difference
+    distribution within that, and returns the exact valid standings from a single representative simulation.
 
     Returns list of row dicts with keys: position, team, played, wins, draws,
     losses, goal_difference, points, advanced.
@@ -158,21 +160,33 @@ def get_group_most_likely_standings(group_name: str, team_order: str) -> list[di
             WHERE group_name = ?
             GROUP BY sim_id
             HAVING STRING_AGG(team, ',' ORDER BY position) = ?
+        ),
+        sims_data AS (
+            SELECT sim_id,
+                   STRING_AGG(points::VARCHAR, ',' ORDER BY position) as pts_dist,
+                   STRING_AGG(goal_difference::VARCHAR, ',' ORDER BY position) as gd_dist
+            FROM group_standings
+            WHERE group_name = ? AND sim_id IN (SELECT sim_id FROM matching_sims)
+            GROUP BY sim_id
+        ),
+        ranked_sims AS (
+            SELECT sim_id,
+                   COUNT(*) OVER (PARTITION BY pts_dist) as pt_freq,
+                   COUNT(*) OVER (PARTITION BY pts_dist, gd_dist) as pt_gd_freq
+            FROM sims_data
         )
         SELECT
-            position, team,
-            MODE(played) AS played,
-            MODE(wins) AS wins,
-            MODE(draws) AS draws,
-            MODE(losses) AS losses,
-            MODE(goal_difference) AS goal_difference,
-            MODE(points) AS points,
-            (SUM(CASE WHEN advanced THEN 1 ELSE 0 END) > COUNT(*) / 2) AS advanced
+            position, team, played, wins, draws, losses,
+            goal_difference, points, advanced
         FROM group_standings
-        WHERE group_name = ? AND sim_id IN (SELECT sim_id FROM matching_sims)
-        GROUP BY position, team
+        WHERE group_name = ?
+          AND sim_id = (
+              SELECT sim_id FROM ranked_sims
+              ORDER BY pt_freq DESC, pt_gd_freq DESC, sim_id
+              LIMIT 1
+          )
         ORDER BY position
-    """, [group_name, team_order, group_name]).fetchdf()
+    """, [group_name, team_order, group_name, group_name]).fetchdf()
     return standings.to_dict("records")
 
 

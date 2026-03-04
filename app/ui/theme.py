@@ -842,5 +842,195 @@ button[data-baseweb="tab"]:focus {
         font-size: 0.9rem;
     }
 }
+
+/* ===== Simulator page ===== */
+
+.wc-sim-changes-summary {
+    background: var(--wc-light);
+    border-left: 3px solid var(--wc-magenta);
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    font-size: 0.85rem;
+}
+
+.wc-sim-changes-summary .change-item {
+    display: inline-block;
+    margin-right: 1rem;
+    margin-bottom: 0.25rem;
+}
+
+.wc-shift-positive { color: var(--wc-turquoise); font-weight: 700; }
+.wc-shift-negative { color: var(--wc-magenta); font-weight: 700; }
+.wc-shift-neutral  { color: var(--wc-secondary); font-weight: 500; }
+
+.wc-sim-results-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.wc-sim-results-table th {
+    text-align: left;
+    padding: 0.4rem 0.5rem;
+    border-bottom: 2px solid var(--wc-turquoise);
+    font-size: 0.8rem;
+    color: var(--wc-secondary);
+}
+
+.wc-sim-results-table td {
+    padding: 0.35rem 0.5rem;
+    border-bottom: 1px solid #F0F0F0;
+}
+
+.wc-sim-results-table tr:hover {
+    background: rgba(0, 180, 216, 0.04);
+}
+
+/* ===== Buttons ========================================= */
+.stButton > button {
+    border-radius: 8px !important;
+    font-weight: 600 !important;
+    padding: 0.5rem 1rem !important;
+    line-height: 1.5 !important;
+    transition: all 0.2s ease !important;
+    /* Reset browser specific button styles: */
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+}
+
+/* Primary buttons */
+.stButton > button[kind="primary"] {
+    background-color: var(--wc-turquoise) !important;
+    color: #FFFFFF !important;
+    border: 1px solid var(--wc-turquoise) !important;
+    box-shadow: 0 4px 12px rgba(0, 180, 216, 0.25) !important;
+}
+
+.stButton > button[kind="primary"]:hover {
+    background-color: #0096C7 !important;
+    border-color: #0096C7 !important;
+    box-shadow: 0 6px 16px rgba(0, 180, 216, 0.35) !important;
+    color: #FFFFFF !important;
+}
+
+/* Secondary buttons */
+.stButton > button[kind="secondary"] {
+    background-color: #FFFFFF !important;
+    color: var(--wc-dark) !important;
+    border: 1px solid #D1D5DB !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+}
+
+.stButton > button[kind="secondary"]:hover {
+    border-color: var(--wc-turquoise) !important;
+    color: var(--wc-turquoise) !important;
+    background-color: rgba(0, 180, 216, 0.04) !important;
+}
+
+/* Force internal paragraphs and spans to inherit button color securely on Brave */
+.stButton > button p, 
+.stButton > button span {
+    color: inherit !important;
+}
+
+/* ===== Expanders ========================================= */
+[data-testid="stExpander"] {
+    border: 1px solid #E5E7EB !important;
+    border-radius: 12px !important;
+    background-color: var(--wc-card-bg) !important;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04) !important;
+    overflow: hidden !important;
+    margin-bottom: 0.5rem !important;
+}
+
+/* Standard expander styling */
+[data-testid="stExpander"] > summary {
+    padding: 0.75rem 1rem !important;
+    background-color: #F8FAFC !important;
+    transition: background-color 0.2s ease !important;
+}
+
+[data-testid="stExpander"] > summary:hover {
+    background-color: #F1F5F9 !important;
+}
+
+/* Force inner details of regular expanders to be consistent */
+[data-testid="stExpander"] [data-testid="stExpanderDetails"] {
+    padding: 1rem !important;
+    background-color: var(--wc-card-bg) !important;
+}
+
+/* Default Expanders (like rank adjustments) - standard text color */
+[data-testid="stExpander"] > summary p,
+[data-testid="stExpander"] > summary span {
+    color: var(--wc-dark) !important;
+    font-weight: 600 !important;
+}
+
+[data-testid="stExpander"] > summary:hover p,
+[data-testid="stExpander"] > summary:hover span,
+[data-testid="stExpander"] > summary:focus p,
+[data-testid="stExpander"] > summary:focus span {
+    color: var(--wc-turquoise) !important;
+}
+
+/* --- EXPLICITLY RESET MOBILE NAV --- */
+/* The above global overrides will hit mobile_nav since CSS structurally applies them globally. 
+   We must rewrite them here with higher specificity, otherwise the mobile bar turns white! */
+.st-key-mobile_nav [data-testid="stExpander"] {
+    background: linear-gradient(135deg, var(--wc-dark) 0%, #162236 100%) !important;
+    border: none !important;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.22) !important;
+}
+
+.st-key-mobile_nav [data-testid="stExpander"] > summary {
+    background: transparent !important;
+    padding: 0.65rem 1.25rem !important;
+}
+
+.st-key-mobile_nav [data-testid="stExpander"] > summary:hover {
+    background: transparent !important;
+}
+
+.st-key-mobile_nav [data-testid="stExpanderDetails"] {
+    background: transparent !important;
+    padding: 0.25rem 0.75rem 0.75rem !important;
+}
+
+.st-key-mobile_nav [data-testid="stExpander"] > summary p,
+.st-key-mobile_nav [data-testid="stExpander"] > summary span,
+.st-key-mobile_nav [data-testid="stExpander"] > summary:hover p,
+.st-key-mobile_nav [data-testid="stExpander"] > summary:hover span,
+.st-key-mobile_nav [data-testid="stExpander"] > summary:focus p,
+.st-key-mobile_nav [data-testid="stExpander"] > summary:focus span {
+    color: var(--wc-gold) !important;
+}
+
+/* ===== Sliders ========================================= */
+/* Apply explicitly styling to slider components so Brave matches the theme */
+.stSlider div[data-baseweb="slider"] {
+    padding-top: 0.5rem;
+}
+
+/* Thumb/handle */
+.stSlider div[role="slider"] {
+    background-color: var(--wc-turquoise) !important;
+    border: 2px solid white !important;
+    box-shadow: 0 0 0 2px var(--wc-turquoise) !important;
+    width: 20px !important;
+    height: 20px !important;
+    border-radius: 50% !important;
+}
+
+/* Tooltips generated from slider */
+.stSlider [role="tooltip"] {
+    background-color: var(--wc-dark) !important;
+    color: #FFFFFF !important;
+    font-weight: 600 !important;
+    border-radius: 6px !important;
+    padding: 0.2rem 0.5rem !important;
+}
 </style>
 """

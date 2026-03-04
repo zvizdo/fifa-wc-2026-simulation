@@ -11,4 +11,4 @@ seaborn==0.13.2
 statsmodels==0.14.6
 pandas==2.3.3
 optuna==4.7.0
-streamlit==1.54.0
+streamlit==1.55.0

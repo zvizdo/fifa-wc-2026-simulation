@@ -115,3 +115,7 @@ OUTCOME_ORDER = [
 ]
 
 GROUP_NAMES = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L"]
+
+# --- Simulator ---
+SIMULATOR_NUM_SIMS = 100
+SIMULATOR_BASE_SEED = 2026
