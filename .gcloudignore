@@ -1,0 +1,11 @@
+# Ignore the .git directory
+.git/
+
+# Include standard git ignores
+#!include:.gitignore
+
+# EXPLICITLY ALLOW the duckdb database and data directory 
+!app/data/*.duckdb
+!app/data/
+!*.duckdb
+!*.pkl

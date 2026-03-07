@@ -21,7 +21,7 @@ import optuna
 import pandas as pd
 from sklearn.metrics import mean_poisson_deviance
 
-from model.cv import leave_one_tournament_out_cv
+from model.cv import leave_one_tournament_out_cv, train_one_evaluate_rest_cv
 from model.pipelines import build_baseline_pipeline, build_full_pipeline
 from model.preprocessing import process_tournament_history
 
@@ -32,9 +32,8 @@ FEATURE_COLUMNS = [
     "rank_shift", "opp_rank_shift",
     "off_rank", "opp_off_rank",
     "def_rank", "opp_def_rank",
-    "host",
+    "host", "opp_host",
     "is_strong_confed", "opp_is_strong_confed",
-    "rest_diff",
     "stage_weight",
 ]
 
@@ -66,6 +65,8 @@ def objective(trial, df_raw):
 
     # Feature transformer hyperparameters
     feature_shape = trial.suggest_float("feature_shape", 0.1, 3.0)
+    host_discount = trial.suggest_float("host_discount", 0.0, 0.4)
+    confed_discount = trial.suggest_float("confed_discount", 0.0, 0.3)
 
     # Regressor hyperparameters
     alpha = trial.suggest_float("alpha", 1e-6, 10.0, log=True)
@@ -79,11 +80,13 @@ def objective(trial, df_raw):
     # Build and evaluate pipeline
     pipeline = build_full_pipeline(
         shape=feature_shape,
+        host_discount=host_discount,
+        confed_discount=confed_discount,
         alpha=alpha,
         max_iter=max_iter,
     )
 
-    return leave_one_tournament_out_cv(pipeline, X, y, tournament_ids)
+    return train_one_evaluate_rest_cv(pipeline, X, y, tournament_ids)
 
 
 def run_baseline(df_raw):
@@ -94,7 +97,7 @@ def run_baseline(df_raw):
 
     # Use known best baseline params from win_exp_model_notes.md
     pipeline = build_baseline_pipeline(shape=1.4223, alpha=0.000253, max_iter=711)
-    score = leave_one_tournament_out_cv(pipeline, X_base, y_base, t_ids)
+    score = train_one_evaluate_rest_cv(pipeline, X_base, y_base, t_ids)
     return score
 
 
@@ -168,6 +171,8 @@ def main(argv=None):
     )
     pipeline = build_full_pipeline(
         shape=best["feature_shape"],
+        host_discount=best["host_discount"],
+        confed_discount=best["confed_discount"],
         alpha=best["alpha"],
         max_iter=best["max_iter"],
     )
@@ -197,6 +202,8 @@ def main(argv=None):
     # --- Train final model on all data ---
     final_pipeline = build_full_pipeline(
         shape=best["feature_shape"],
+        host_discount=best["host_discount"],
+        confed_discount=best["confed_discount"],
         alpha=best["alpha"],
         max_iter=best["max_iter"],
     )
@@ -210,6 +217,11 @@ def main(argv=None):
             "k_off_mul": best["k_off_mul"],
             "k_def_mul": best["k_def_mul"],
             "goal_cap": best["goal_cap"],
+        },
+        "feature_params": {
+            "shape": best["feature_shape"],
+            "host_discount": best["host_discount"],
+            "confed_discount": best["confed_discount"],
         },
         "feature_columns": FEATURE_COLUMNS,
         "best_score": study.best_value,

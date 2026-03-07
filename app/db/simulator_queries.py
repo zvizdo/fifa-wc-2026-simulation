@@ -202,6 +202,7 @@ def get_user_all_team_best_finish(con: duckdb.DuckDBPyConnection,
         )
         SELECT cs.team,
                ROUND(AVG(cs.stage_score), 3) AS avg_stage_score,
+               ROUND(STDDEV(cs.stage_score), 3) AS stddev_stage_score,
                COALESCE(ROUND(c.wins * 100.0 / {num_sims}, 2), 0) AS champ_prob
         FROM combined_scores cs
         LEFT JOIN champs c ON c.team = cs.team

@@ -39,6 +39,20 @@ def render_podium_card(position: str, team: str, probability: float,
             """, unsafe_allow_html=True)
 
 
+def render_story_card(title: str, subtitle: str, content_html: str, css_class: str = "wc-podium-gold"):
+    """Render a general story/superlative card for the landing page."""
+    html = (
+        f'<div class="{css_class}" style="min-height: 240px; display: flex; flex-direction: column; justify-content: center;">'
+        f'<div class="wc-podium-position" style="font-size: 1.1rem; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 1px;">{title}</div>'
+        f'<div style="font-size: 0.9rem; color: var(--wc-secondary); margin-bottom: 1rem; line-height: 1.3;">{subtitle}</div>'
+        f'<div style="flex-grow: 1; display: flex; flex-direction: column; justify-content: center;">'
+        f'{content_html}'
+        f'</div>'
+        f'</div>'
+    )
+    st.markdown(html, unsafe_allow_html=True)
+
+
 def render_stat_box(value: str, label: str):
     """Render a stat metric box."""
     st.markdown(f"""

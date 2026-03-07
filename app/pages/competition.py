@@ -290,14 +290,14 @@ elif selected_stage == "GROUP_STAGE":
 else:
     display_name = STAGE_DISPLAY_NAMES.get(selected_stage, selected_stage)
     st.markdown(
-        f'<div class="wc-section-sub">Top 5 Most Likely {display_name} Matchups</div>',
+        f'<div class="wc-section-sub">Top 12 Most Likely {display_name} Matchups</div>',
         unsafe_allow_html=True,
     )
     st.caption(
-        "Showing the 5 most frequently occurring matchups across all 100,000 simulations."
+        "Showing the 12 most frequently occurring matchups across all 100,000 simulations."
     )
 
-    matchups = get_stage_matchups(selected_stage, limit=5)
+    matchups = get_stage_matchups(selected_stage, limit=12)
 
     if matchups.empty:
         st.info("No matchup data available for this stage.")

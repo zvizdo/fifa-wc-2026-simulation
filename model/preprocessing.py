@@ -125,8 +125,7 @@ def process_tournament_history(df_base, shape=1.5, k_mul=5,
     df_base : pd.DataFrame
         Raw dataset with columns: tournament_id, match_id, match_date,
         team, opp_team, rank, opp_rank, score, win, draw,
-        lst_match_days_ago, opp_lst_match_days_ago, confederation,
-        opp_confederation, host.
+        confederation, opp_confederation, host, opp_host.
     shape : float
         Exponent for all rank shift expectation formulas.
     k_mul : float
@@ -143,7 +142,7 @@ def process_tournament_history(df_base, shape=1.5, k_mul=5,
     pd.DataFrame
         Sorted copy of df_base with added columns: cur_rank, opp_cur_rank,
         off_rank, opp_off_rank, def_rank, opp_def_rank, rank_shift,
-        opp_rank_shift, rest_diff, is_strong_confed, opp_is_strong_confed.
+        opp_rank_shift, is_strong_confed, opp_is_strong_confed.
     """
     df_sorted = df_base.sort_values(
         ["tournament_id", "match_date", "team", "opp_team"]
@@ -224,9 +223,6 @@ def process_tournament_history(df_base, shape=1.5, k_mul=5,
     # Derived features
     df_sorted["rank_shift"] = df_sorted["cur_rank"] - df_sorted["rank"]
     df_sorted["opp_rank_shift"] = df_sorted["opp_cur_rank"] - df_sorted["opp_rank"]
-    df_sorted["rest_diff"] = (
-        df_sorted["lst_match_days_ago"] - df_sorted["opp_lst_match_days_ago"]
-    )
     df_sorted["is_strong_confed"] = (
         df_sorted["confederation"].isin(STRONG_CONFEDS).astype(int)
     )

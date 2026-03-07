@@ -6,10 +6,11 @@ FIFA World Cup 2026 Simulation Explorer
 import streamlit as st
 from db.landing_queries import (
     get_champion_probs,
-    get_runner_up_probs,
-    get_third_place_probs,
+    get_most_likely_final,
+    get_dark_horse,
 )
-from ui.cards import render_podium_card, render_stat_box, render_info_box
+from ui.cards import render_story_card, render_stat_box, render_info_box
+from ui.flags import get_flag
 
 # --- Hero Section ---
 st.markdown(
@@ -27,13 +28,13 @@ st.markdown(
 )
 
 # --- Load data ---
-champions = get_champion_probs()
-runners_up = get_runner_up_probs()
-thirds = get_third_place_probs()
+champions = get_champion_probs(limit=1)
+most_likely_final = get_most_likely_final()
+dark_horse = get_dark_horse(rank_cutoff=15)
 
-# --- Projected Podium ---
+# --- Simulation Storylines ---
 st.markdown(
-    '<div class="wc-section-header">Projected Podium</div>', unsafe_allow_html=True
+    '<div class="wc-section-header">Simulation Storylines</div>', unsafe_allow_html=True
 )
 st.caption(
     "Based on 100,000 full tournament simulations using a model trained on past World Cup matches."
@@ -42,39 +43,68 @@ st.caption(
 col1, col2, col3 = st.columns(3)
 
 with col1:
-    render_podium_card(
-        position="Champion",
-        team=champions.iloc[0]["team"],
-        probability=champions.iloc[0]["probability"],
-        css_class="wc-podium-gold",
-        secondaries=[
-            (champions.iloc[i]["team"], champions.iloc[i]["probability"])
-            for i in range(1, min(3, len(champions)))
-        ],
+    team = champions.iloc[0]["team"]
+    prob = champions.iloc[0]["probability"]
+    flag = get_flag(team)
+    content = (
+        '<div style="text-align: center; margin-bottom: 0.5rem;">'
+        f'<div style="font-size: 3.5rem;">{flag}</div>'
+        f'<div style="font-size: 1.8rem; font-weight: 700; margin: 0.5rem 0;">{team}</div>'
+        f'<div style="color: var(--wc-turquoise); font-size: 1.8rem; font-weight: 800;">{prob:.1f}%</div>'
+        '</div>'
+    )
+    render_story_card(
+        title="The Favorite",
+        subtitle="Team with the highest probability to lift the trophy.",
+        content_html=content,
+        css_class="wc-podium-gold"
     )
 
 with col2:
-    render_podium_card(
-        position="Runner-up",
-        team=runners_up.iloc[0]["team"],
-        probability=runners_up.iloc[0]["probability"],
-        css_class="wc-podium-silver",
-        secondaries=[
-            (runners_up.iloc[i]["team"], runners_up.iloc[i]["probability"])
-            for i in range(1, min(3, len(runners_up)))
-        ],
+    team1 = most_likely_final.iloc[0]["team1"]
+    team2 = most_likely_final.iloc[0]["team2"]
+    prob = most_likely_final.iloc[0]["probability"]
+    flag1 = get_flag(team1)
+    flag2 = get_flag(team2)
+    content = (
+        '<div style="text-align: center; margin-bottom: 0.5rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">'
+        '<div style="text-align: right;">'
+        f'<div style="font-size: 2.2rem;">{flag1}</div>'
+        f'<div style="font-size: 1rem; font-weight: 700; margin-top: 0.2rem;">{team1}</div>'
+        '</div>'
+        '<div style="font-size: 1.2rem; font-weight: 800; color: var(--wc-secondary); margin: 0 0.5rem;">vs</div>'
+        '<div style="text-align: left;">'
+        f'<div style="font-size: 2.2rem;">{flag2}</div>'
+        f'<div style="font-size: 1rem; font-weight: 700; margin-top: 0.2rem;">{team2}</div>'
+        '</div>'
+        '</div>'
+        f'<div style="text-align: center; color: var(--wc-turquoise); font-size: 1.6rem; font-weight: 800; margin-top: 1rem;">{prob:.1f}%</div>'
+    )
+    render_story_card(
+        title="Most Likely Final",
+        subtitle="The single most probable matchup in the championship game.",
+        content_html=content,
+        css_class="wc-podium-silver"
     )
 
 with col3:
-    render_podium_card(
-        position="3rd Place",
-        team=thirds.iloc[0]["team"],
-        probability=thirds.iloc[0]["probability"],
-        css_class="wc-podium-bronze",
-        secondaries=[
-            (thirds.iloc[i]["team"], thirds.iloc[i]["probability"])
-            for i in range(1, min(3, len(thirds)))
-        ],
+    team = dark_horse.iloc[0]["team"]
+    prob = dark_horse.iloc[0]["probability"]
+    rank = dark_horse.iloc[0]["fifa_rank"]
+    flag = get_flag(team)
+    content = (
+        '<div style="text-align: center; margin-bottom: 0.5rem;">'
+        f'<div style="font-size: 3.5rem;">{flag}</div>'
+        f'<div style="font-size: 1.5rem; font-weight: 700; margin: 0.5rem 0 0.2rem 0;">{team}</div>'
+        f'<div style="font-size: 0.9rem; color: var(--wc-secondary); font-weight: 600; margin-bottom: 0.5rem;">Pre-Tournament Rank: {rank}</div>'
+        f'<div style="color: var(--wc-turquoise); font-size: 1.6rem; font-weight: 800;">{prob:.1f}%</div>'
+        '</div>'
+    )
+    render_story_card(
+        title="The Dark Horse",
+        subtitle="Team ranked outside Top 15 with highest chance to reach Semi-Finals.",
+        content_html=content,
+        css_class="wc-podium-bronze"
     )
 
 st.markdown("<br>", unsafe_allow_html=True)

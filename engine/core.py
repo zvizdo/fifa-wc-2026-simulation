@@ -33,7 +33,9 @@ class Team:
 
         self.current_rank = fifa_rank
         self.current_off_rank = fifa_rank
-        self.current_def_rank = fifa_rank   
+        self.current_def_rank = fifa_rank
+
+        self._group_stats_cache: Optional[dict] = None
 
     def assign_group(self, group: 'Group'):
         """Assign this team to a group."""
@@ -42,13 +44,17 @@ class Team:
     def add_match(self, match: 'Match'):
         """Add a match to this team's history."""
         self.matches.append(match)
-    
+        self._group_stats_cache = None  # invalidate cache
+
     def get_group_matches(self) -> List['Match']:
         """Get only group stage matches."""
         return [m for m in self.matches if m.stage == STAGE.GROUP_STAGE]
-    
+
     def get_group_stats(self) -> dict:
-        """Calculate group stage statistics for this team."""
+        """Calculate group stage statistics for this team (cached)."""
+        if self._group_stats_cache is not None:
+            return self._group_stats_cache
+
         stats = {
             'played': 0,
             'wins': 0,
@@ -59,22 +65,22 @@ class Team:
             'goal_difference': 0,
             'points': 0
         }
-        
+
         for match in self.get_group_matches():
             if match.home_score is None or match.away_score is None:
                 continue  # Match not played yet
-                
+
             stats['played'] += 1
             is_home = match.home_team == self
-            
+
             if is_home:
                 gf, ga = match.home_score, match.away_score
             else:
                 gf, ga = match.away_score, match.home_score
-            
+
             stats['goals_for'] += gf
             stats['goals_against'] += ga
-            
+
             if gf > ga:
                 stats['wins'] += 1
                 stats['points'] += 3
@@ -83,13 +89,15 @@ class Team:
                 stats['points'] += 1
             else:
                 stats['losses'] += 1
-        
+
         stats['goal_difference'] = stats['goals_for'] - stats['goals_against']
+        self._group_stats_cache = stats
         return stats
 
     def reset_matches(self):
         """Clear all match history and reset dynamic ranks."""
         self.matches = []
+        self._group_stats_cache = None
         self.current_rank = self.fifa_rank
         self.current_off_rank = self.fifa_rank
         self.current_def_rank = self.fifa_rank
@@ -277,28 +285,48 @@ class Group:
         return result
 
     def _break_ties(self, tied_teams: List[Team], team_stats: List[Tuple[Team, dict]]) -> List[Team]:
-        """Apply tiebreaker rules to sort tied teams."""
+        """Apply tiebreaker rules to sort tied teams.
+
+        FIFA rules require recursive re-application: after h2h criteria
+        separate some teams, the remaining subset must be re-evaluated
+        using only their mutual h2h results.
+        """
         if len(tied_teams) <= 1:
             return tied_teams
-        
-        # Get head-to-head stats
+
         h2h = self.get_head_to_head_stats(tied_teams)
         stats_map = {t[0]: t[1] for t in team_stats}
-        
-        # Create sorting key with all tiebreaker criteria
-        def sort_key(team):
-            h2h_stats = h2h[team]
-            overall = stats_map[team]
+
+        def _sort_key(team):
             return (
-                h2h_stats['points'],      # H2H points
-                h2h_stats['gd'],          # H2H goal difference
-                h2h_stats['gf'],          # H2H goals scored
-                overall['goal_difference'],  # Overall GD
-                overall['goals_for'],     # Overall GF
-                -team.fifa_rank           # FIFA ranking (lower is better)
+                h2h[team]['points'],
+                h2h[team]['gd'],
+                h2h[team]['gf'],
+                stats_map[team]['goal_difference'],
+                stats_map[team]['goals_for'],
+                -team.fifa_rank,
             )
-        
-        return sorted(tied_teams, key=sort_key, reverse=True)
+
+        # Stable sort: alphabetical first, then by criteria descending
+        teams_sorted = sorted(tied_teams, key=lambda t: t.name)
+        teams_sorted = sorted(teams_sorted, key=_sort_key, reverse=True)
+
+        # Recursively resolve sub-groups that remain tied
+        result = []
+        i = 0
+        while i < len(teams_sorted):
+            j = i + 1
+            while j < len(teams_sorted) and _sort_key(teams_sorted[j]) == _sort_key(teams_sorted[i]):
+                j += 1
+            sub = teams_sorted[i:j]
+            if len(sub) > 1 and len(sub) < len(tied_teams):
+                # Re-evaluate with h2h among only this subset
+                sub_stats = [(t, stats_map[t]) for t in sub]
+                sub = self._break_ties(sub, sub_stats)
+            result.extend(sub)
+            i = j
+
+        return result
 
     def __repr__(self):
         team_names = [t.name for t in self.teams]

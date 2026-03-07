@@ -8,6 +8,7 @@ An interactive Streamlit dashboard that visualizes the results of 100,000 FIFA W
 - **Competition Explorer** — Stage-by-stage matchup probabilities, group scenarios, head-to-head analyzer
 - **Team Explorer** — Per-team tournament path, outcome distribution, and likely opponents by stage
 - **City Explorer** — Host city matchup projections across 16 venues in the USA, Mexico, and Canada
+- **Simulator** — Adjust team ranks with sliders to run custom simulations and compare results against the baseline
 
 ## Match Prediction Model
 
@@ -21,22 +22,22 @@ The **baseline model** uses a single feature — win expectation derived from th
 win_exp = 1 / (1 + (rank / opp_rank) ^ shape)
 ```
 
-The **expanded model** adds 10 more features for a total of 11, reducing mean Poisson deviance by ~14% over the baseline in leave-one-tournament-out cross-validation on World Cup data from 1998–2022.
+The **expanded model** computes **7 transformed features** from 15 raw input columns, incorporating dynamic in-tournament ranks, offensive/defensive splits, and effective rank discounts for host advantage and confederation strength. Host and confederation effects are not modeled as separate binary features — instead, they are baked into every win-expectation calculation via effective rank discounts:
+
+```
+eff_rank = rank × (1 - host_discount × is_host) × (1 - confed_discount × is_strong_confed)
+```
 
 ### Features
 
 | Feature | Description |
 |---|---|
-| **Win expectation** | Base win probability from pre-tournament FIFA rankings |
+| **Win expectation** | `1/(1+(eff_rank/eff_opp_rank)^shape)` using pre-tournament FIFA rankings, adjusted by host and confederation discounts |
 | **Current win expectation** | Same formula but using dynamic in-tournament ranks that evolve after each match via Elo-style updates |
 | **Rank shift** | Difference between current dynamic rank and base FIFA rank — captures momentum and form within the tournament |
 | **Opponent rank shift** | Same as above, for the opponent |
-| **Offensive win expectation** | Team's offensive rank vs opponent's defensive rank — measures attacking strength against the specific defensive quality faced |
-| **Defensive win expectation** | Team's defensive rank vs opponent's offensive rank — measures defensive resilience against the specific attacking threat |
-| **Host** | Binary flag for whether the team is a host nation (home advantage) |
-| **Strong confederation** | Whether the team belongs to UEFA or CONMEBOL (historically stronger confederations) |
-| **Opponent strong confederation** | Same as above, for the opponent |
-| **Rest difference** | Difference in days since each team's last match |
+| **Offensive win expectation** | Team's effective offensive rank vs opponent's effective defensive rank — measures attacking strength against the specific defensive quality faced |
+| **Defensive win expectation** | Team's effective defensive rank vs opponent's effective offensive rank — measures defensive resilience against the specific attacking threat |
 | **Stage weight** | Ordinal encoding of the competition round: 0 = group stage, 1 = round of 16 / quarter-finals / third-place, 2 = semi-finals / final |
 
 ### Dynamic Ranks
@@ -55,7 +56,7 @@ The shift magnitude is controlled by a k-factor scaled by `log(1 + |rank_diff|)`
 python -m model.train --n-trials 200 --seed 42
 ```
 
-This runs Optuna TPE hyperparameter search over 8 parameters (5 preprocessing + 3 model), evaluating each trial with leave-one-tournament-out CV. The final model is trained on all data and saved to `model/expanded_model.pkl`.
+This runs Optuna TPE hyperparameter search over 10 parameters (5 preprocessing + 3 feature transformer + 2 regressor), evaluating each trial with train-one-evaluate-rest CV — training on a single tournament and validating on all others, a harsher test to prevent overfitting. The final model is trained on all data and saved to `model/expanded_model.pkl`.
 
 ## Tech Stack
 
@@ -73,9 +74,10 @@ This runs Optuna TPE hyperparameter search over 8 parameters (5 preprocessing + 
 ├── app/                    # Streamlit application
 │   ├── main.py             # App entry point
 │   ├── config.py           # Constants & configuration
-│   ├── pages/              # Landing, Competition, Team, City pages
-│   ├── db/                 # DuckDB query layer
-│   ├── ui/                 # Theme, cards, charts, brackets, flags
+│   ├── sim_worker.py       # Worker for parallel simulation runs
+│   ├── pages/              # Landing, Competition, Team, City, Simulator pages
+│   ├── db/                 # DuckDB query layer (incl. simulator queries)
+│   ├── ui/                 # Theme, cards, charts, brackets, flags, simulator components
 │   └── data/               # DuckDB database (generated)
 ├── engine/                 # Simulation engine
 │   ├── sim.py              # Competition orchestrator
@@ -90,7 +92,9 @@ This runs Optuna TPE hyperparameter search over 8 parameters (5 preprocessing + 
 │   ├── pipelines.py        # Pipeline builders (baseline & full)
 │   ├── cv.py               # Leave-one-tournament-out cross-validation
 │   ├── expanded_model.pkl  # Trained expanded model artifact
+│   ├── win_exp_model.pkl   # Trained baseline model artifact
 │   ├── win_exp_model_train.py   # Legacy baseline model training
+│   ├── win_exp_model_notes.md   # Baseline model notes
 │   ├── nb_eda_v2.ipynb     # Expanded model EDA & feature analysis
 │   ├── nb_eda.ipynb        # Baseline model EDA
 │   └── nb_dataset.ipynb    # Dataset preparation notebook

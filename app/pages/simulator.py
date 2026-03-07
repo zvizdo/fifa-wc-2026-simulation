@@ -6,6 +6,9 @@ import os
 import sys
 import copy
 import json
+import math
+import pandas as pd
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 import streamlit as st
 import duckdb
@@ -17,6 +20,7 @@ if _ROOT not in sys.path:
 
 from engine.sim import Competition
 from engine.match import ModeledMatch
+from sim_worker import run_single_sim
 
 from ui.cards import render_info_box
 from ui.flags import get_flag
@@ -47,11 +51,32 @@ from db.competition_queries import get_all_groups_most_likely
 from config import SIMULATOR_NUM_SIMS, SIMULATOR_BASE_SEED, GROUP_NAMES
 
 
+import math
+
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
+def is_stat_sig_prop(user_prob, base_prob, num_sims):
+    """Check statistical significance for proportions (percentages 0-100)."""
+    p_hat = user_prob / 100.0
+    p_0 = base_prob / 100.0
+    if p_0 == 0 or p_0 == 1:
+        return p_hat != p_0
+        
+    se = math.sqrt((p_0 * (1 - p_0)) / num_sims)
+    if se == 0:
+        return False
+        
+    z = (p_hat - p_0) / se
+    return abs(z) > 1.96
+
+def is_stat_sig_mean(user_mean, base_mean, user_sd, num_sims):
+    """Check statistical significance for means using z-test approximation."""
+    if pd.isna(user_sd) or user_sd == 0 or num_sims == 0:
+        return user_mean != base_mean
+    t = (user_mean - base_mean) / (user_sd / math.sqrt(num_sims))
+    return abs(t) > 1.96
 
 _TEAMS_JSON = os.path.join(_ROOT, "data", "wc_2026_teams.json")
-
 
 def _init_state():
     """Load teams JSON and initialize session state on first visit."""
@@ -61,48 +86,87 @@ def _init_state():
     with open(_TEAMS_JSON) as f:
         teams_data = json.load(f)
 
-    default_ranks: dict[str, int] = {}
+    raw_ranks: dict[str, int] = {}
     team_meta: dict[str, dict] = {}
 
     for group_name, group_teams in teams_data["groups"].items():
         for t in group_teams:
             name = t["name"]
-            default_ranks[name] = t["fifa_rank"]
+            raw_ranks[name] = t["fifa_rank"]
             team_meta[name] = {
                 "group": group_name,
                 "confederation": t["confederation"],
                 "host": t.get("host", False),
             }
 
+    # Resolve duplicate FIFA ranks so every team starts with a unique rank.
+    # Without this, the first slider change triggers _rebuild_ranks which
+    # resolves duplicates and causes spurious shifts for uninvolved teams.
+    sorted_teams = sorted(raw_ranks.items(), key=lambda x: (x[1], x[0]))
+    default_ranks: dict[str, int] = {}
+    occupied: set[int] = set()
+    for team, raw_rank in sorted_teams:
+        slot = raw_rank
+        while slot in occupied:
+            slot += 1
+        default_ranks[team] = slot
+        occupied.add(slot)
+
     st.session_state["sim_teams_data"] = teams_data
     st.session_state["sim_default_ranks"] = default_ranks
     st.session_state["sim_adjusted_ranks"] = dict(default_ranks)
+    st.session_state["sim_user_overrides"] = {}  # only explicit slider changes
     st.session_state["sim_team_meta"] = team_meta
     st.session_state["sim_expanded_team"] = None
     st.session_state["sim_has_results"] = False
     st.session_state["sim_user_db"] = None
 
 
-def _cascade_rank(changed_team: str, new_rank: int):
-    """Set *changed_team* to *new_rank* and cascade collisions downward."""
-    ranks = st.session_state["sim_adjusted_ranks"]
-    ranks[changed_team] = new_rank
+def _rebuild_ranks():
+    """Rebuild all ranks from defaults + explicit user overrides, resolving collisions.
 
-    current_team = changed_team
-    occupied = new_rank
-    while True:
-        collider = next(
-            (t for t, r in ranks.items() if t != current_team and r == occupied),
-            None,
-        )
-        if collider is None:
-            break
-        new_collider_rank = min(occupied + 1, 100)
-        ranks[collider] = new_collider_rank
-        if new_collider_rank >= 100:
-            break
-        current_team = collider
-        occupied = new_collider_rank
+    Strategy: lock overridden teams at their chosen ranks, then reassign all
+    non-overridden teams into the remaining free slots, preserving their
+    relative default-rank order.  This avoids chain-cascade bugs and
+    guarantees every team gets a unique rank in [1, N].
+    """
+    defaults = st.session_state["sim_default_ranks"]
+    overrides = st.session_state.setdefault("sim_user_overrides", {})
+
+    ranks: dict[str, int] = {}
+    occupied: set[int] = set()
+
+    # 1. Lock overridden teams at their chosen ranks
+    for team, rank in overrides.items():
+        ranks[team] = rank
+        occupied.add(rank)
+
+    # 2. Non-overridden teams sorted by their default rank (best first)
+    free_teams = sorted(
+        (t for t in defaults if t not in overrides),
+        key=lambda t: defaults[t],
+    )
+
+    # 3. Assign each to the nearest free slot at or after its default rank
+    next_slot = 1
+    for team in free_teams:
+        target = defaults[team]
+        slot = max(target, next_slot)
+        while slot in occupied:
+            slot += 1
+        ranks[team] = slot
+        occupied.add(slot)
+        next_slot = slot + 1
+
+    st.session_state["sim_adjusted_ranks"] = ranks
+
+    # Sync slider widget keys so they reflect cascaded values.
+    # Without this, Streamlit ignores the `value` param on re-render
+    # and shows the stale session_state[key] instead.
+    for team, rank in ranks.items():
+        slider_key = f"sim_slider_{team}"
+        if slider_key in st.session_state:
+            st.session_state[slider_key] = rank
 
 
 def _has_rank_changes() -> bool:
@@ -129,7 +193,7 @@ def _build_modified_teams_data() -> dict:
 
 
 def _run_simulation():
-    """Run N simulations, store results in an in-memory DuckDB."""
+    """Run N simulations in parallel, store results in an in-memory DuckDB."""
     teams_data = _build_modified_teams_data()
     num_sims = SIMULATOR_NUM_SIMS
 
@@ -175,16 +239,18 @@ def _run_simulation():
 
     progress = st.progress(0, text="Preparing simulation...")
 
-    for i in range(num_sims):
-        seed = SIMULATOR_BASE_SEED + i
-        comp = Competition(teams_data=teams_data, random_seed=seed,
-                           match_class=ModeledMatch)
-        comp.simulate()
-        match_rows, stand_rows, third_rows = comp.extract_rows(f"u{i}")
-        Competition.insert_rows(con, match_rows, stand_rows, third_rows)
-
-        progress.progress((i + 1) / num_sims,
-                          text=f"Simulating... {i + 1}/{num_sims}")
+    total_cpus = os.cpu_count() or 4
+    num_workers = max(2, int(total_cpus / 2) - 1)
+    tasks = [(teams_data, i) for i in range(num_sims)]
+    
+    completed = 0
+    with ProcessPoolExecutor(max_workers=num_workers) as executor:
+        futures = [executor.submit(run_single_sim, task) for task in tasks]
+        for future in as_completed(futures):
+            match_rows, stand_rows, third_rows = future.result()
+            Competition.insert_rows(con, match_rows, stand_rows, third_rows)
+            completed += 1
+            progress.progress(completed / num_sims, text=f"Simulating... {completed}/{num_sims}")
 
     Competition.create_db_indexes(con)
     progress.progress(1.0, text="Simulation complete!")
@@ -196,100 +262,173 @@ def _run_simulation():
 # ── Result views ─────────────────────────────────────────────────────────────
 
 
-def _render_podium_view(user_db, num_sims):
-    """Top-3 podium + championship probability shifts table."""
+def _render_headlines_view(user_db, num_sims):
+    """Top-3 podium + dynamic headlines based on statistical significance."""
 
     render_info_box(
         "<strong>How to read this:</strong> "
-        "\"Your Sim\" shows results from your 100 custom simulations. "
-        "\"Baseline\" shows the pre-computed 100k simulation results with default ranks. "
-        "The <strong>shift</strong> indicates how your rank changes affected each team's chances."
+        f"We compare your {SIMULATOR_NUM_SIMS} simulations to the 100k baseline "
+        "using a <strong>p &lt; 0.05</strong> threshold to filter out noise. <br><br>"
+        "<strong>Bold blue and bold red shifts</strong> are statistically significant. "
+        "<strong>Faded shifts</strong> are within expected variance. "
+        "For example: a bold <span class='wc-shift-positive' style='font-weight:bold;'>+4.0%</span> represents a mathematically proven shift, "
+        "while a faded <span class='wc-shift-positive' style='opacity: 0.6; font-size: 0.85em;'>+1.2%</span> could just be simulation noise."
     )
 
-    user_champs = get_user_champion_probs(user_db, num_sims, limit=48)
-    user_runners = get_user_runner_up_probs(user_db, num_sims, limit=3)
-    user_thirds = get_user_third_place_probs(user_db, num_sims, limit=3)
-
-    base_champs = get_champion_probs(limit=48)
-    base_runners = get_runner_up_probs(limit=3)
-    base_thirds = get_third_place_probs(limit=3)
-
-    base_champ_dict = dict(zip(base_champs["team"], base_champs["probability"]))
-    base_runner_dict = dict(zip(base_runners["team"], base_runners["probability"]))
-    base_third_dict = dict(zip(base_thirds["team"], base_thirds["probability"]))
-
-    # Build podium data
-    def _top_team(df, base_dict):
-        if df.empty:
-            return ("TBD", 0.0, 0.0, 0.0)
-        row = df.iloc[0]
-        bp = base_dict.get(row["team"], 0.0)
-        return (row["team"], row["probability"], bp, row["probability"] - bp)
-
-    champ = _top_team(user_champs, base_champ_dict)
-    runner = _top_team(user_runners, base_runner_dict)
-    third = _top_team(user_thirds, base_third_dict)
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        render_podium_with_shifts("Champion", champ[0], champ[1], champ[2],
-                                  champ[3], "wc-podium-gold")
-    with col2:
-        render_podium_with_shifts("Runner-up", runner[0], runner[1], runner[2],
-                                  runner[3], "wc-podium-silver")
-    with col3:
-        render_podium_with_shifts("3rd Place", third[0], third[1], third[2],
-                                  third[3], "wc-podium-bronze")
-
-    # Championship probability shifts table
-    st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown(
-        '<div class="wc-section-sub">Championship Probability Shifts</div>',
-        unsafe_allow_html=True,
-    )
-
-    podium_data = []
-    for _, row in user_champs.iterrows():
+    user_finish = get_user_all_team_best_finish(user_db, num_sims)
+    baseline_finish = get_baseline_all_team_best_finish()
+    base_score_dict = dict(zip(baseline_finish["team"], baseline_finish["avg_stage_score"]))
+    
+    # 1. Find teams with statistically significant shifts in avg_stage_score
+    sig_mean_teams = []
+    for _, row in user_finish.iterrows():
         team = row["team"]
-        bp = base_champ_dict.get(team, 0.0)
-        podium_data.append({
-            "team": team,
-            "user_prob": row["probability"],
-            "base_prob": bp,
-            "shift": row["probability"] - bp,
-        })
-
-    # Also include baseline teams not in user results
-    user_team_set = set(user_champs["team"])
-    for _, row in base_champs.iterrows():
-        if row["team"] not in user_team_set:
-            podium_data.append({
-                "team": row["team"],
-                "user_prob": 0.0,
-                "base_prob": row["probability"],
-                "shift": -row["probability"],
+        user_sc = row["avg_stage_score"]
+        user_sd = row["stddev_stage_score"]
+        base_sc = base_score_dict.get(team, 0.0)
+        
+        if is_stat_sig_mean(user_sc, base_sc, user_sd, num_sims):
+            shift = user_sc - base_sc
+            sig_mean_teams.append({
+                "team": team,
+                "shift": shift,
+                "user_score": user_sc,
+                "base_score": base_sc,
             })
-
-    podium_data.sort(key=lambda d: d["shift"], reverse=True)
-    render_champion_shifts_table(podium_data[:15])
+            
+    # Sort by magnitude of shift
+    sig_mean_teams.sort(key=lambda t: abs(t["shift"]), reverse=True)
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown('<div class="wc-section-sub">Data-Driven Headlines</div>', unsafe_allow_html=True)
+    
+    highlighted_teams = []
+    
+    if not sig_mean_teams:
+        st.info("No statistically significant shifts detected. Try making larger rank adjustments to see meaningful impacts.")
+    else:
+        count = 0
+        overrides = st.session_state.get("sim_user_overrides", {})
+        for t_data in sig_mean_teams:
+            if count >= 4:
+                break
+            team = t_data["team"]
+            shift = t_data["shift"]
+            flag = get_flag(team)
+            
+            user_stages = get_user_stage_reach_probs(user_db, num_sims, team)
+            base_stages = get_team_stage_reach_probs(team)
+            
+            max_sig_stage = None
+            max_sig_stage_shift = 0.0
+            
+            baseline_dict = dict(zip(base_stages["stage"], base_stages["probability"]))
+            for _, u_row in user_stages.iterrows():
+                stg = u_row["stage"]
+                if stg == "GROUP_STAGE":
+                    continue
+                u_prob = u_row["probability"]
+                b_prob = baseline_dict.get(stg, 0.0)
+                
+                if is_stat_sig_prop(u_prob, b_prob, num_sims):
+                    stg_shift = u_prob - b_prob
+                    if (shift > 0 and stg_shift > max_sig_stage_shift) or (shift < 0 and stg_shift < max_sig_stage_shift):
+                        max_sig_stage_shift = stg_shift
+                        max_sig_stage = u_row["display_name"]
+            
+            if shift > 0:
+                headline_type = "📉 BUTTERFLY EFFECT?" if team not in overrides else "📈 RISING STOCK"
+                if max_sig_stage:
+                    desc = f"{flag} <strong>{team}</strong> has mathematically improved their chances to reach the {max_sig_stage} by <span class='wc-shift-positive'>+{max_sig_stage_shift:.1f}%</span>."
+                else:
+                    desc = f"{flag} <strong>{team}</strong> has improved their expected Tournament Depth (+{shift:.2f})."
+            else:
+                headline_type = "📉 BUTTERFLY EFFECT" if team not in overrides else "⚠️ SLIPPING STANDARDS"
+                if max_sig_stage:
+                    desc = f"{flag} <strong>{team}</strong> has suffered a statistically significant drop in chances to reach the {max_sig_stage} (<span class='wc-shift-negative'>{max_sig_stage_shift:.1f}%</span>)."
+                else:
+                    desc = f"{flag} <strong>{team}</strong> has worsened their expected Tournament Depth ({shift:.2f})."
+                    
+            st.markdown(f"<div style='margin-bottom:0.8rem; font-size:1.05rem;'><strong>{headline_type}:</strong> {desc}</div>", unsafe_allow_html=True)
+            highlighted_teams.append(team)
+            count += 1
+            
+    # Show stats for teams in headlines
+    if highlighted_teams:
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown('<div class="wc-section-sub">Headline Team Stats</div>', unsafe_allow_html=True)
+        for team in highlighted_teams:
+            user_stages = get_user_stage_reach_probs(user_db, num_sims, team)
+            base_stages = get_team_stage_reach_probs(team)
+            flag = get_flag(team)
+            with st.expander(f"{flag} {team} Stage-by-Stage Breakdown", expanded=False):
+                # We reuse the progression table component but wrap the rendering
+                # in a way that respects stat sig
+                
+                stage_order = [
+                    ("GROUP_STAGE", "Group Stage"),
+                    ("ROUND_OF_32", "Round of 32"),
+                    ("ROUND_OF_16", "Round of 16"),
+                    ("QUARTER_FINALS", "Quarter-Finals"),
+                    ("SEMI_FINALS", "Semi-Finals"),
+                    ("FINAL", "Final"),
+                    ("CHAMPION", "Champion"),
+                ]
+                
+                baseline_dict = dict(zip(base_stages["stage"], base_stages["probability"]))
+                
+                html = '<table class="wc-sim-results-table"><thead><tr>'
+                html += '<th>Stage</th><th>Your Sim</th><th>Baseline</th><th>Shift</th>'
+                html += '</tr></thead><tbody>'
+                
+                for stage_key, display in stage_order:
+                    user_row = user_stages[user_stages["stage"] == stage_key]
+                    u_prob = float(user_row["probability"].iloc[0]) if not user_row.empty else 0.0
+                    b_prob = baseline_dict.get(stage_key, 0.0)
+                    s = u_prob - b_prob
+                    
+                    is_sig = False if stage_key == "GROUP_STAGE" else is_stat_sig_prop(u_prob, b_prob, num_sims)
+                    shift_html = render_shift_badge(s, is_sig)
+                    
+                    html += '<tr>'
+                    html += f'<td>{display}</td>'
+                    html += f'<td><strong>{u_prob:.1f}%</strong></td>'
+                    html += f'<td>{b_prob:.1f}%</td>'
+                    html += f'<td>{shift_html}</td>'
+                    html += '</tr>'
+                
+                html += '</tbody></table>'
+                st.markdown(html, unsafe_allow_html=True)
 
 
 def _render_groups_view(user_db, num_sims):
     """Group finishing orders with position shift indicators."""
 
     render_info_box(
-        "Most likely finishing order per group from your simulation. "
-        "The <strong>Shift</strong> column shows how each team's position "
-        "moved compared to the baseline."
+        "<strong>How to read this:</strong> "
+        "Most likely finishing order per group from your simulation. <br><br>"
+        "<strong>Bold blue and bold red shifts</strong> mean a team's finishing position changed with statistical significance. "
+        "<strong>Faded shifts</strong> are within expected variance. "
+        "For example: a bold <span class='wc-shift-positive' style='font-weight:bold;'>+1</span> means the team consistently finishes higher, "
+        "while a faded <span class='wc-shift-positive' style='opacity: 0.6; font-size: 0.85em;'>+1</span> is mathematically indistinguishable from the baseline."
     )
 
-    # Baseline group orders
     baseline_groups = get_all_groups_most_likely()
     baseline_orders = {}
     for _, row in baseline_groups.iterrows():
         baseline_orders[row["group_name"]] = row["team_order"].split(",")
+
+    user_finish = get_user_all_team_best_finish(user_db, num_sims)
+    baseline_finish = get_baseline_all_team_best_finish()
+    is_sig_dict = {}
+    base_score_dict = dict(zip(baseline_finish["team"], baseline_finish["avg_stage_score"]))
+    for _, row in user_finish.iterrows():
+        team = row["team"]
+        user_sc = row["avg_stage_score"]
+        user_sd = row["stddev_stage_score"]
+        base_sc = base_score_dict.get(team, 0.0)
+        is_sig = is_stat_sig_mean(user_sc, base_sc, user_sd, num_sims)
+        is_sig_dict[team] = is_sig
 
     for row_start in range(0, 12, 3):
         cols = st.columns(3)
@@ -302,67 +441,66 @@ def _render_groups_view(user_db, num_sims):
                 standings = get_user_group_standings(user_db, num_sims, group_name)
                 base_order = baseline_orders.get(group_name, [])
                 if standings:
-                    render_sim_group_table(standings, base_order, group_name)
+                    render_sim_group_table(standings, base_order, group_name, is_sig_dict)
 
 
 def _render_teams_view(user_db, num_sims):
     """Per-team progression view sorted by biggest positive shift."""
 
     render_info_box(
-        "Each team's stage-by-stage probabilities from your simulation compared "
-        "to the baseline. Teams are sorted by their overall tournament depth, known "
-        "as their <strong>Average Stage Score</strong>. This score calculates "
-        "expected progression by calculating the weighted average of the stages they reached "
-        "(e.g., Group Stage = 0, R32 = 1 ... Winner = 6). <br><br>"
-        "<strong>A higher average score indicates a deeper expected run.</strong>"
+        "<strong>How to read this:</strong> "
+        "Filtered to show <strong>ONLY teams with statistically significant shifts</strong> "
+        "in their Tournament Depth (p &lt; 0.05). "
+        "Tournament Depth calculates expected progression (Group Stage = 0, R32 = 1 ... Winner = 6). A higher score means a deeper run.<br><br>"
+        "<strong>Bold blue and bold red</strong> shifts indicate a mathematically significant change, "
+        "while <strong>faded</strong> shifts are within expected variance. "
+        "For example: a bold <span class='wc-shift-positive' style='font-weight:bold;'>+0.50</span> Tournament Depth shift means the team improved, "
+        "while a faded <span class='wc-shift-positive' style='opacity: 0.6; font-size: 0.85em;'>+0.10</span> is just statistical noise."
     )
 
-    # Average stage score for user and baseline
     user_finish = get_user_all_team_best_finish(user_db, num_sims)
     baseline_finish = get_baseline_all_team_best_finish()
     
-    # Create baseline dicts for O(1) lookups
     base_champ_dict = dict(zip(baseline_finish["team"], baseline_finish["champ_prob"]))
     base_score_dict = dict(zip(baseline_finish["team"], baseline_finish["avg_stage_score"]))
 
-    # Build shift list
     team_list = []
     for _, row in user_finish.iterrows():
         team = row["team"]
         user_champ = row["champ_prob"]
         base_champ = base_champ_dict.get(team, 0.0)
         user_score = row["avg_stage_score"]
+        user_sd = row["stddev_stage_score"]
         base_score = base_score_dict.get(team, 0.0)
         
-        team_list.append({
-            "team": team,
-            "user_champ": user_champ,
-            "base_champ": base_champ,
-            "champ_shift": user_champ - base_champ,
-            "avg_score": user_score,
-            "avg_score_shift": user_score - base_score,
-        })
+        is_sig = is_stat_sig_mean(user_score, base_score, user_sd, num_sims)
+        if is_sig:
+            team_list.append({
+                "team": team,
+                "user_champ": user_champ,
+                "base_champ": base_champ,
+                "champ_shift": user_champ - base_champ,
+                "champ_is_sig": is_stat_sig_prop(user_champ, base_champ, num_sims),
+                "avg_score": user_score,
+                "avg_score_shift": user_score - base_score,
+                "is_sig": is_sig,
+            })
 
-    team_list.sort(key=lambda d: d["avg_score"], reverse=True)
+    if not team_list:
+        st.info("No statistically significant shifts detected. All changes were within margins of expected variance.")
+        return
 
-    # Count auto-expanded teams and show explanation
-    auto_expanded = [t for t in team_list if t["champ_shift"] > 2.0]
-    if auto_expanded:
-        st.caption(
-            f"Teams with a championship probability shift greater than +2% are "
-            f"auto-expanded ({len(auto_expanded)} team{'s' if len(auto_expanded) != 1 else ''})."
-        )
+    team_list.sort(key=lambda d: abs(d["avg_score_shift"]), reverse=True)
 
-    # Compact table overview first
     html = '<div class="wc-card-flat" style="padding:0.75rem;">'
     html += '<table class="wc-sim-results-table"><thead><tr>'
-    html += '<th>#</th><th>Team</th><th>Champion %</th><th>Baseline</th><th>Shift</th><th>Avg Score</th><th>Shift</th>'
+    html += '<th>#</th><th>Team</th><th>Champion %</th><th>Baseline</th><th>Shift</th><th>Tournament Depth</th><th>Shift</th>'
     html += '</tr></thead><tbody>'
 
     for rank, t in enumerate(team_list[:15], 1):
         flag = get_flag(t["team"])
-        champ_shift_badge = render_shift_badge(t["champ_shift"])
-        score_shift_badge = render_score_shift_badge(t["avg_score_shift"])
+        champ_shift_badge = render_shift_badge(t["champ_shift"], t["champ_is_sig"])
+        score_shift_badge = render_score_shift_badge(t["avg_score_shift"], True) # filtered to sig only
         
         html += '<tr>'
         html += f'<td>{rank}</td>'
@@ -379,7 +517,7 @@ def _render_teams_view(user_db, num_sims):
 
     st.markdown("<br>", unsafe_allow_html=True)
     st.markdown(
-        '<div class="wc-section-sub">Stage-by-Stage Breakdown</div>',
+        '<div class="wc-section-sub">Stage-by-Stage Breakdown for Impacted Teams</div>',
         unsafe_allow_html=True,
     )
 
@@ -405,7 +543,7 @@ def _render_teams_view(user_db, num_sims):
         with st.expander(label, expanded=auto_expand):
             user_stages = get_user_stage_reach_probs(user_db, num_sims, team)
             baseline_stages = get_team_stage_reach_probs(team)
-            render_team_progression_table(team, user_stages, baseline_stages)
+            render_team_progression_table(team, user_stages, baseline_stages, num_sims)
 
 
 # ── Page layout ──────────────────────────────────────────────────────────────
@@ -507,7 +645,16 @@ st.markdown(html, unsafe_allow_html=True)
 # Expander for adjusting ranks within this group
 def _on_rank_change(t_name):
     new_r = st.session_state[f"sim_slider_{t_name}"]
-    _cascade_rank(t_name, new_r)
+    defaults = st.session_state["sim_default_ranks"]
+    overrides = st.session_state.setdefault("sim_user_overrides", {})
+
+    # Track only explicit user changes; remove if back to default
+    if new_r == defaults[t_name]:
+        overrides.pop(t_name, None)
+    else:
+        overrides[t_name] = new_r
+
+    _rebuild_ranks()
     st.session_state["sim_expanded_team"] = t_name
 
 for t in group_teams:
@@ -525,10 +672,11 @@ for t in group_teams:
         host_text = " | Host" if tm["host"] else ""
         st.caption(f'{tm["confederation"]} | Default rank: {default_rank}{host_text}')
 
+        _max_rank = max(100, max(adjusted.values()))
         st.slider(
             "FIFA Rank",
             min_value=1,
-            max_value=100,
+            max_value=_max_rank,
             value=current_rank,
             key=f"sim_slider_{team_name}",
             label_visibility="collapsed",
@@ -555,6 +703,7 @@ with col_run:
 with col_reset:
     if st.button("Reset All Ranks", use_container_width=True):
         st.session_state["sim_adjusted_ranks"] = dict(defaults)
+        st.session_state["sim_user_overrides"] = {}
         st.session_state["sim_expanded_team"] = None
         st.session_state["sim_has_results"] = False
         if st.session_state.get("sim_user_db"):
@@ -580,14 +729,14 @@ if st.session_state.get("sim_has_results"):
 
     results_view = st.pills(
         "View",
-        options=["Podium", "Groups", "Teams"],
-        default="Podium",
+        options=["Headlines", "Groups", "Teams"],
+        default="Headlines",
     )
 
     user_db = st.session_state["sim_user_db"]
 
-    if results_view == "Podium":
-        _render_podium_view(user_db, SIMULATOR_NUM_SIMS)
+    if results_view == "Headlines":
+        _render_headlines_view(user_db, SIMULATOR_NUM_SIMS)
     elif results_view == "Groups":
         _render_groups_view(user_db, SIMULATOR_NUM_SIMS)
     elif results_view == "Teams":

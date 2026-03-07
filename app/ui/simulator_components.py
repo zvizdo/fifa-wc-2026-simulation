@@ -1,15 +1,35 @@
 """
 Reusable UI components for the Simulator page.
 """
+import math
 import streamlit as st
 from ui.flags import get_flag
 
+def is_stat_sig_prop(user_prob, base_prob, num_sims):
+    """Check statistical significance for proportions (percentages 0-100)."""
+    if not num_sims:
+        return True
+    p_hat = user_prob / 100.0
+    p_0 = base_prob / 100.0
+    if p_0 == 0 or p_0 == 1:
+        return p_hat != p_0
+        
+    se = math.sqrt((p_0 * (1 - p_0)) / num_sims)
+    if se == 0:
+        return False
+        
+    z = (p_hat - p_0) / se
+    return abs(z) > 1.96
 
-def render_shift_badge(shift: float) -> str:
+
+def render_shift_badge(shift: float, is_sig: bool = True) -> str:
     """Return HTML string for a probability shift badge.
 
     Turquoise for positive, magenta for negative, muted for neutral.
     """
+    if not is_sig:
+        return f'<span class="wc-shift-neutral" style="opacity: 0.6; font-size: 0.85em;" title="Not statistically significant">{shift:+.1f}%</span>'
+
     if shift > 0.05:
         css = "wc-shift-positive"
         text = f"+{shift:.1f}%"
@@ -19,11 +39,14 @@ def render_shift_badge(shift: float) -> str:
     else:
         css = "wc-shift-neutral"
         text = f"{shift:+.1f}%"
-    return f'<span class="{css}">{text}</span>'
+    return f'<span class="{css}" style="font-weight:bold;">{text}</span>'
 
 
-def render_score_shift_badge(shift: float) -> str:
+def render_score_shift_badge(shift: float, is_sig: bool = True) -> str:
     """Return HTML string for a non-percentage float shift (e.g. for avg score)."""
+    if not is_sig:
+        return f'<span class="wc-shift-neutral" style="opacity: 0.6; font-size: 0.85em;" title="Not statistically significant">{shift:+.2f}</span>'
+
     if shift > 0.005:
         css = "wc-shift-positive"
         text = f"+{shift:.2f}"
@@ -33,7 +56,7 @@ def render_score_shift_badge(shift: float) -> str:
     else:
         css = "wc-shift-neutral"
         text = f"{shift:+.2f}"
-    return f'<span class="{css}">{text}</span>'
+    return f'<span class="{css}" style="font-weight:bold;">{text}</span>'
 
 
 def render_podium_with_shifts(position: str, team: str, user_prob: float,
@@ -81,7 +104,7 @@ def render_champion_shifts_table(podium_data: list[dict]):
 
 
 def render_sim_group_table(user_standings: list[dict], baseline_order: list[str],
-                           group_name: str):
+                           group_name: str, is_sig_dict: dict = None):
     """Render a compact group table from user simulation with position shifts.
 
     Args:
@@ -112,12 +135,15 @@ def render_sim_group_table(user_standings: list[dict], baseline_order: list[str]
         base_pos = baseline_positions.get(team, user_pos)
         pos_diff = base_pos - user_pos  # positive = moved up
 
-        if pos_diff > 0:
-            shift_html = f'<span class="wc-shift-positive">+{pos_diff}</span>'
-        elif pos_diff < 0:
-            shift_html = f'<span class="wc-shift-negative">{pos_diff}</span>'
-        else:
+        is_sig = is_sig_dict.get(team, False) if is_sig_dict else True
+        if pos_diff == 0:
             shift_html = '<span class="wc-shift-neutral">-</span>'
+        elif not is_sig:
+            shift_html = f'<span class="wc-shift-neutral" style="opacity: 0.6; font-size: 0.85em;" title="Not statistically significant">{pos_diff:+d}</span>'
+        elif pos_diff > 0:
+            shift_html = f'<span class="wc-shift-positive" style="font-weight:bold;">+{pos_diff}</span>'
+        else:
+            shift_html = f'<span class="wc-shift-negative" style="font-weight:bold;">{pos_diff}</span>'
 
         html += f'<tr class="{row_class}">'
         html += f'<td>{user_pos}</td>'
@@ -131,13 +157,14 @@ def render_sim_group_table(user_standings: list[dict], baseline_order: list[str]
     st.markdown(html, unsafe_allow_html=True)
 
 
-def render_team_progression_table(team: str, user_stages, baseline_stages):
+def render_team_progression_table(team: str, user_stages, baseline_stages, num_sims: int = None):
     """Render a stage-by-stage comparison table for a team.
 
     Args:
         team: Team name
         user_stages: DataFrame with stage, probability columns (user sims)
         baseline_stages: DataFrame with stage, probability columns (100k baseline)
+        num_sims: Optional number of sims to compute statistical significance.
     """
     baseline_dict = {}
     for _, row in baseline_stages.iterrows():
@@ -162,7 +189,9 @@ def render_team_progression_table(team: str, user_stages, baseline_stages):
         u_prob = float(user_row["probability"].iloc[0]) if not user_row.empty else 0.0
         b_prob = baseline_dict.get(stage_key, 0.0)
         s = u_prob - b_prob
-        shift_html = render_shift_badge(s)
+        
+        is_sig = False if stage_key == "GROUP_STAGE" else is_stat_sig_prop(u_prob, b_prob, num_sims)
+        shift_html = render_shift_badge(s, is_sig)
 
         html += '<tr>'
         html += f'<td>{display}</td>'

@@ -64,6 +64,56 @@ def get_third_place_probs(limit: int = 3) -> pd.DataFrame:
 
 
 @st.cache_data
+def get_most_likely_final() -> pd.DataFrame:
+    """The single most probable Final matchup.
+    
+    Returns DataFrame with columns: team1, team2, count, probability
+    """
+    con = get_db()
+    return con.execute(f"""
+        SELECT
+            CASE WHEN home_team < away_team THEN home_team ELSE away_team END AS team1,
+            CASE WHEN home_team < away_team THEN away_team ELSE home_team END AS team2,
+            COUNT(*) AS count,
+            ROUND(COUNT(*) * 100.0 / {TOTAL_SIMS}, 2) AS probability
+        FROM matches
+        WHERE match_number = 104
+        GROUP BY team1, team2
+        ORDER BY count DESC
+        LIMIT 1
+    """).fetchdf()
+
+
+@st.cache_data
+def get_dark_horse(rank_cutoff: int = 15) -> pd.DataFrame:
+    """The team ranked below `rank_cutoff` with highest probability to reach
+    the Semi-Finals.
+    
+    Returns DataFrame with columns: team, fifa_rank, count, probability
+    """
+    con = get_db()
+    return con.execute(f"""
+        WITH sf_teams AS (
+            SELECT home_team AS team, sim_id FROM matches WHERE stage = 'SEMI_FINALS'
+            UNION ALL
+            SELECT away_team AS team, sim_id FROM matches WHERE stage = 'SEMI_FINALS'
+        ),
+        team_ranks AS (
+            SELECT DISTINCT team, fifa_rank FROM group_standings
+        )
+        SELECT s.team, r.fifa_rank, COUNT(*) AS count,
+               ROUND(COUNT(*) * 100.0 / {TOTAL_SIMS}, 2) AS probability
+        FROM sf_teams s
+        JOIN team_ranks r ON s.team = r.team
+        WHERE r.fifa_rank > ?
+        GROUP BY s.team, r.fifa_rank
+        ORDER BY count DESC
+        LIMIT 1
+    """, [rank_cutoff]).fetchdf()
+
+
+
+@st.cache_data
 def get_baseline_all_team_best_finish() -> pd.DataFrame:
     """Average tournament depth score and champion probability for all teams in the baseline.
 

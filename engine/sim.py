@@ -76,6 +76,7 @@ class Competition:
         self.champion: Optional[Team] = None
         self.runner_up: Optional[Team] = None
         self.third_place: Optional[Team] = None
+        self._cached_standings: Optional[Dict[str, List[Team]]] = None
         
         if teams_data:
             self._setup_from_data(teams_data)
@@ -110,18 +111,31 @@ class Competition:
         """Get HostCity object for a city name."""
         if city_name in VENUE_MAP:
             return VENUE_MAP[city_name]
-        return get_city_by_name(city_name) or self._rng.choice(HOST_CITIES)
+        
+        # If venue is unknown, pick a deterministic fallback instead of pulling 
+        # from the global random stream to prevent bracket-butterfly effects.
+        fallback_idx = sum(ord(c) for c in city_name) % len(HOST_CITIES)
+        return get_city_by_name(city_name) or HOST_CITIES[fallback_idx]
     
     def _create_match(self, match_number: int, stage: STAGE, 
                       city: Optional[HostCity] = None,
                       group: Optional[Group] = None) -> Match:
         """Create a new match with specific match number using the configured match class."""
+        # Create an isolated RNG for this specific match based on the competition seed
+        # This prevents the order of events or tiebreakers in earlier matches from 
+        # shifting the global random stream and artificially changing unrelated matches
+        if self.random_seed is not None:
+            match_seed = self.random_seed + (match_number * 10000)
+            match_rng = SecureRandom(match_seed)
+        else:
+            match_rng = self._rng
+            
         match = self._match_class(
             number=match_number,
             city=city,
             stage=stage,
             group=group,
-            rng=self._rng
+            rng=match_rng
         )
         self.all_matches.append(match)
         self.matches_by_number[match_number] = match
@@ -186,8 +200,12 @@ class Competition:
                 match.play()
     
     def get_group_standings(self) -> Dict[str, List[Team]]:
-        """Get standings for all groups."""
-        return {name: group.get_standings() for name, group in self.groups.items()}
+        """Get standings for all groups (cached after first call)."""
+        if self._cached_standings is not None:
+            return self._cached_standings
+        standings = {name: group.get_standings() for name, group in self.groups.items()}
+        self._cached_standings = standings
+        return standings
     
     def rank_third_place_teams(self) -> List[Team]:
         """
@@ -483,6 +501,7 @@ class Competition:
         self.champion = None
         self.runner_up = None
         self.third_place = None
+        self._cached_standings = None
     
     def get_final_standings(self) -> Dict:
         """Get the final tournament standings."""

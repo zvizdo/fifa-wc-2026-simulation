@@ -95,6 +95,26 @@ def dixon_coles_adjustment(home_goals, away_goals, lambda_home, lambda_away, rho
     return max(0.0001, res)
 
 
+_MAX_GOALS = 7
+_GOALS_RANGE = np.arange(_MAX_GOALS)
+
+
+def _build_prob_matrix(lambda_home, lambda_away, rho):
+    """Build a normalized Dixon-Coles probability matrix (vectorized)."""
+    home_pmf = poisson.pmf(_GOALS_RANGE, lambda_home)
+    away_pmf = poisson.pmf(_GOALS_RANGE, lambda_away)
+    prob_matrix = np.outer(home_pmf, away_pmf)
+
+    # Apply Dixon-Coles adjustment to the 4 low-scoring cells only
+    prob_matrix[0, 0] *= max(0.0001, 1 - lambda_home * lambda_away * rho)
+    prob_matrix[0, 1] *= max(0.0001, 1 + lambda_home * rho)
+    prob_matrix[1, 0] *= max(0.0001, 1 + lambda_away * rho)
+    prob_matrix[1, 1] *= max(0.0001, 1 - rho)
+
+    prob_matrix /= prob_matrix.sum()
+    return prob_matrix
+
+
 class RankMatch(Match):
     def play(self):
         self.home_score = (
@@ -103,6 +123,13 @@ class RankMatch(Match):
         self.away_score = (
             1 if self.away_team.fifa_rank < self.home_team.fifa_rank else 0
         )
+
+        # Handle knockout draws when ranks are equal (coin flip)
+        if self.stage != STAGE.GROUP_STAGE and self.home_score == self.away_score:
+            if self._rng.random() < 0.5:
+                self.home_score += 1
+            else:
+                self.away_score += 1
 
         return self.home_score, self.away_score
 
@@ -138,41 +165,24 @@ class WinExpMatch(Match):
         lambda_home = model.predict(home_features)[0]
         lambda_away = model.predict(away_features)[0]
 
-        # Create probability matrix for scores 0-6
-        max_goals = 7
-        prob_matrix = np.zeros((max_goals, max_goals))
+        # Build probability matrix via vectorized Poisson + inline Dixon-Coles
+        prob_matrix = _build_prob_matrix(lambda_home, lambda_away, self.rho)
 
-        for home_goals in range(max_goals):
-            for away_goals in range(max_goals):
-                # Base Poisson probability
-                prob = poisson.pmf(home_goals, lambda_home) * poisson.pmf(away_goals, lambda_away)
+        # In knockout stages, zero out draw cells and renormalize so only
+        # decisive scorelines can be sampled.
+        if self.stage != STAGE.GROUP_STAGE:
+            np.fill_diagonal(prob_matrix, 0.0)
+            prob_matrix /= prob_matrix.sum()
 
-                # Apply Dixon-Coles adjustment
-                adjustment = dixon_coles_adjustment(
-                    home_goals, away_goals, lambda_home, lambda_away, self.rho
-                )
-                prob_matrix[home_goals, away_goals] = prob * adjustment
-
-        # Normalize probabilities
-        prob_matrix = prob_matrix / prob_matrix.sum()
-
-        # Sample a score from the probability distribution using cumulative sum method
-        # This works with any RNG type (random.Random, SecureRandom, etc.)
+        # Sample a score from the probability distribution
         flat_probs = prob_matrix.flatten()
         cumsum = np.cumsum(flat_probs)
         rand_val = self._rng.random()
-        sampled_index = np.searchsorted(cumsum, rand_val)
+        sampled_index = int(np.searchsorted(cumsum, rand_val))
 
         # Convert flat index back to (home_goals, away_goals)
-        self.home_score = sampled_index // max_goals
-        self.away_score = sampled_index % max_goals
-
-        # Handle knockout stage draws (50-50 random winner)
-        if self.stage != self.stage.GROUP_STAGE and self.home_score == self.away_score:
-            if self._rng.random() < 0.5:
-                self.home_score += 1
-            else:
-                self.away_score += 1
+        self.home_score = sampled_index // _MAX_GOALS
+        self.away_score = sampled_index % _MAX_GOALS
 
         return self.home_score, self.away_score
 
@@ -180,7 +190,7 @@ class WinExpMatch(Match):
 class ModeledMatch(Match):
     """Match simulation using the expanded Poisson regression model.
 
-    Uses the full feature set (15 features) matching model/train.py's
+    Uses the feature set (13 features) matching model/train.py's
     FEATURE_COLUMNS order. Tracks and updates dynamic ranks (cur_rank,
     off_rank, def_rank) on Team objects after each match, mirroring the
     logic in model/preprocessing.process_tournament_history.
@@ -191,14 +201,14 @@ class ModeledMatch(Match):
         self.rho = rho
 
     def _build_feature_row(self, team, opponent):
-        """Build the 15-element feature vector for one team perspective.
+        """Build the 13-element feature vector for one team perspective.
 
         Column order must match model/train.py FEATURE_COLUMNS:
             rank, opp_rank, cur_rank, opp_cur_rank,
             rank_shift, opp_rank_shift,
             off_rank, opp_off_rank, def_rank, opp_def_rank,
-            host, is_strong_confed, opp_is_strong_confed,
-            rest_diff, stage_weight
+            host, opp_host, is_strong_confed, opp_is_strong_confed,
+            stage_weight
         """
         rank = float(team.fifa_rank)
         opp_rank = float(opponent.fifa_rank)
@@ -211,9 +221,9 @@ class ModeledMatch(Match):
         def_rank = float(team.current_def_rank)
         opp_def_rank = float(opponent.current_def_rank)
         host = float(team.host)
+        opp_host = float(opponent.host)
         is_strong_confed = 1.0 if team.confederation in STRONG_CONFEDS else 0.0
         opp_is_strong_confed = 1.0 if opponent.confederation in STRONG_CONFEDS else 0.0
-        rest_diff = 0.0
         stage_weight = float(STAGE_WEIGHT_MAP.get(self.stage, 1))
 
         return np.array([[
@@ -222,22 +232,21 @@ class ModeledMatch(Match):
             rank_shift, opp_rank_shift,
             off_rank, opp_off_rank,
             def_rank, opp_def_rank,
-            host,
+            host, opp_host,
             is_strong_confed, opp_is_strong_confed,
-            rest_diff,
             stage_weight,
         ]])
 
     def _update_ranks(self, team, opp_cur_rank_snapshot, goals_scored,
-                      goals_conceded, result):
+                      goals_conceded, result, pp):
         """Update dynamic ranks on team after match, matching preprocessing logic.
 
         Uses the opponent's current_rank snapshot taken before any updates,
         matching how process_tournament_history records kickoff values first.
-        """
-        artifact = _load_expanded_model()
-        pp = artifact["preprocess_params"]
 
+        Args:
+            pp: preprocess_params dict from the model artifact.
+        """
         # General rank shift
         gen_shift = calculate_rank_shift(
             team.current_rank, opp_cur_rank_snapshot,
@@ -278,35 +287,23 @@ class ModeledMatch(Match):
         lambda_home = pipeline.predict(home_features)[0]
         lambda_away = pipeline.predict(away_features)[0]
 
-        # Build Dixon-Coles probability matrix (scores 0-6)
-        max_goals = 7
-        prob_matrix = np.zeros((max_goals, max_goals))
+        # Build probability matrix via vectorized Poisson + inline Dixon-Coles
+        prob_matrix = _build_prob_matrix(lambda_home, lambda_away, self.rho)
 
-        for hg in range(max_goals):
-            for ag in range(max_goals):
-                prob = (poisson.pmf(hg, lambda_home)
-                        * poisson.pmf(ag, lambda_away))
-                adj = dixon_coles_adjustment(
-                    hg, ag, lambda_home, lambda_away, self.rho
-                )
-                prob_matrix[hg, ag] = prob * adj
+        # In knockout stages, zero out draw cells and renormalize so only
+        # decisive scorelines can be sampled.
+        if self.stage != STAGE.GROUP_STAGE:
+            np.fill_diagonal(prob_matrix, 0.0)
+            prob_matrix /= prob_matrix.sum()
 
-        # Normalize and sample
-        prob_matrix /= prob_matrix.sum()
+        # Sample a score
         flat_probs = prob_matrix.flatten()
         cumsum = np.cumsum(flat_probs)
         rand_val = self._rng.random()
-        sampled_index = np.searchsorted(cumsum, rand_val)
+        sampled_index = int(np.searchsorted(cumsum, rand_val))
 
-        self.home_score = sampled_index // max_goals
-        self.away_score = sampled_index % max_goals
-
-        # Handle knockout stage draws
-        if self.stage != STAGE.GROUP_STAGE and self.home_score == self.away_score:
-            if self._rng.random() < 0.5:
-                self.home_score += 1
-            else:
-                self.away_score += 1
+        self.home_score = sampled_index // _MAX_GOALS
+        self.away_score = sampled_index % _MAX_GOALS
 
         # Update dynamic ranks for both teams
         # Snapshot opponent ranks at kickoff before any updates
@@ -318,17 +315,18 @@ class ModeledMatch(Match):
                        else 0.5)
         away_result = 1.0 - home_result
 
+        pp = artifact["preprocess_params"]
         self._update_ranks(
             self.home_team, home_opp_cur_rank,
             goals_scored=self.home_score,
             goals_conceded=self.away_score,
-            result=home_result,
+            result=home_result, pp=pp,
         )
         self._update_ranks(
             self.away_team, away_opp_cur_rank,
             goals_scored=self.away_score,
             goals_conceded=self.home_score,
-            result=away_result,
+            result=away_result, pp=pp,
         )
 
         return self.home_score, self.away_score

@@ -39,3 +39,36 @@ def leave_one_tournament_out_cv(
         fold_scores.append(mean_poisson_deviance(y_val, y_pred))
 
     return np.mean(fold_scores)
+
+def train_one_evaluate_rest_cv(
+    pipeline: Pipeline,
+    X: np.ndarray,
+    y: np.ndarray,
+    tournament_ids: pd.Series,
+) -> float:
+    """Evaluate pipeline by training on one tournament and evaluating on the rest.
+
+    Each fold uses one tournament as the training set and evaluates on
+    the remaining tournaments. Returns the mean Poisson deviance averaged
+    across all folds. This is a harsher test to prevent overfitting.
+    
+    Note: X should already be preprocessed (process_tournament_history applied).
+    """
+    unique_tournaments = tournament_ids.unique()
+    fold_scores = []
+
+    for t_id in unique_tournaments:
+        # Flipped logic: train on the single tournament, validate on the rest
+        train_mask = tournament_ids == t_id
+        val_mask = tournament_ids != t_id
+
+        X_train, X_val = X[train_mask], X[val_mask]
+        y_train, y_val = y[train_mask], y[val_mask]
+
+        pipeline.fit(X_train, y_train)
+        y_pred = pipeline.predict(X_val)
+        y_pred = np.clip(y_pred, 1e-6, None)
+
+        fold_scores.append(mean_poisson_deviance(y_val, y_pred))
+
+    return np.mean(fold_scores)
