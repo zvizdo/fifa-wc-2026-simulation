@@ -37,7 +37,8 @@ class Competition:
     """
     
     def __init__(self, teams_data: Optional[Dict] = None, random_seed: Optional[int] = None,
-                 match_class: Optional[Type[Match]] = None):
+                 match_class: Optional[Type[Match]] = None,
+                 match_kwargs: Optional[Dict] = None):
         """
         Initialize the competition.
         
@@ -47,12 +48,14 @@ class Competition:
             match_class: Optional custom Match class (e.g., PredictedMatch). Must have
                          same interface as Match: __init__(number, city, stage, group, rng),
                          assign_teams(), play(), get_winner(), get_loser().
+            match_kwargs: Optional dict of extra kwargs passed to every match constructor.
         """
         self.random_seed = random_seed
         self._rng = SecureRandom(random_seed)
         
         # Store the match class to use (default: Match from core)
         self._match_class = match_class if match_class is not None else Match
+        self._match_kwargs = match_kwargs or {}
         
         self.groups: Dict[str, Group] = {}
         self.teams: List[Team] = []
@@ -83,11 +86,13 @@ class Competition:
     
     @classmethod
     def from_json_file(cls, filepath: str, random_seed: Optional[int] = None,
-                       match_class: Optional[Type[Match]] = None) -> 'Competition':
+                       match_class: Optional[Type[Match]] = None,
+                       match_kwargs: Optional[Dict] = None) -> 'Competition':
         """Load competition from a JSON file."""
         with open(filepath, 'r') as f:
             data = json.load(f)
-        return cls(teams_data=data, random_seed=random_seed, match_class=match_class)
+        return cls(teams_data=data, random_seed=random_seed, match_class=match_class,
+                   match_kwargs=match_kwargs)
     
     def _setup_from_data(self, data: Dict):
         """Set up groups and teams from data dictionary."""
@@ -135,7 +140,8 @@ class Competition:
             city=city,
             stage=stage,
             group=group,
-            rng=match_rng
+            rng=match_rng,
+            **self._match_kwargs
         )
         self.all_matches.append(match)
         self.matches_by_number[match_number] = match

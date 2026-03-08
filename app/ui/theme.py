@@ -323,7 +323,7 @@ button[data-baseweb="tab"]:focus {
 }
 
 .wc-podium-bronze {
-    background: linear-gradient(135deg, #CD7F32 0%, #D4943A 100%);
+    background: linear-gradient(135deg, #FFEFD5 0%, #D4943A 100%);
     border-radius: 16px;
     padding: 2rem 1.5rem;
     text-align: center;
@@ -799,6 +799,7 @@ button[data-baseweb="tab"]:focus {
     .wc-podium-silver,
     .wc-podium-bronze {
         padding: 1.25rem 1rem;
+        margin-bottom: 1rem;
     }
 
     /* --- Stat boxes --- */

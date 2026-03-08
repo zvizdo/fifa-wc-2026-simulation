@@ -32,6 +32,7 @@ from ui.simulator_components import (
     render_sim_group_table,
     render_team_progression_table,
 )
+from ui.headlines import generate_headlines
 from db.simulator_queries import (
     get_user_champion_probs,
     get_user_runner_up_probs,
@@ -50,8 +51,24 @@ from db.team_queries import get_team_stage_reach_probs
 from db.competition_queries import get_all_groups_most_likely
 from config import SIMULATOR_NUM_SIMS, SIMULATOR_BASE_SEED, GROUP_NAMES
 
-
+import pickle
+from pathlib import Path
 import math
+
+# ── Advantage slider config ──────────────────────────────────────────────────
+
+# 9-step multipliers: position 4 (index 3) = Normal = trained value
+ADVANTAGE_MULTIPLIERS = [0.0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0]
+ADVANTAGE_LABELS = ["None", "Minimal", "Small", "Medium", "Normal", "Boosted", "Large", "Strong", "Extreme"]
+ADVANTAGE_DEFAULT_IDX = 4  # "Normal"
+
+def _load_trained_discounts():
+    """Read the trained host_discount and confed_discount from the model."""
+    model_path = Path(_ROOT) / "model" / "expanded_model.pkl"
+    with open(model_path, "rb") as f:
+        artifact = pickle.load(f)
+    transformer = artifact["pipeline"].steps[0][1]
+    return transformer.host_discount, transformer.confed_discount
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -121,6 +138,15 @@ def _init_state():
     st.session_state["sim_has_results"] = False
     st.session_state["sim_user_db"] = None
 
+    # Advantage slider defaults
+    st.session_state["sim_host_adv_idx"] = ADVANTAGE_DEFAULT_IDX
+    st.session_state["sim_confed_adv_idx"] = ADVANTAGE_DEFAULT_IDX
+
+    # Cache trained discount values for display
+    host_d, confed_d = _load_trained_discounts()
+    st.session_state["sim_trained_host_discount"] = host_d
+    st.session_state["sim_trained_confed_discount"] = confed_d
+
 
 def _rebuild_ranks():
     """Rebuild all ranks from defaults + explicit user overrides, resolving collisions.
@@ -169,10 +195,16 @@ def _rebuild_ranks():
             st.session_state[slider_key] = rank
 
 
-def _has_rank_changes() -> bool:
+def _has_any_changes() -> bool:
+    """Return True if any rank or advantage slider differs from defaults."""
     adj = st.session_state["sim_adjusted_ranks"]
     dfl = st.session_state["sim_default_ranks"]
-    return any(adj[t] != dfl[t] for t in adj)
+    rank_changed = any(adj[t] != dfl[t] for t in adj)
+    adv_changed = (
+        st.session_state["sim_host_adv_idx"] != ADVANTAGE_DEFAULT_IDX
+        or st.session_state["sim_confed_adv_idx"] != ADVANTAGE_DEFAULT_IDX
+    )
+    return rank_changed or adv_changed
 
 
 def _get_changes() -> list[tuple[str, int, int]]:
@@ -241,7 +273,16 @@ def _run_simulation():
 
     total_cpus = os.cpu_count() or 4
     num_workers = max(2, int(total_cpus / 2) - 1)
-    tasks = [(teams_data, i) for i in range(num_sims)]
+    # Build match_kwargs from advantage sliders
+    host_mul = ADVANTAGE_MULTIPLIERS[st.session_state["sim_host_adv_idx"]]
+    confed_mul = ADVANTAGE_MULTIPLIERS[st.session_state["sim_confed_adv_idx"]]
+    match_kwargs = {}
+    if host_mul != 1.0:
+        match_kwargs["host_discount_mul"] = host_mul
+    if confed_mul != 1.0:
+        match_kwargs["confed_discount_mul"] = confed_mul
+
+    tasks = [(teams_data, i, match_kwargs) for i in range(num_sims)]
     
     completed = 0
     with ProcessPoolExecutor(max_workers=num_workers) as executor:
@@ -263,7 +304,7 @@ def _run_simulation():
 
 
 def _render_headlines_view(user_db, num_sims):
-    """Top-3 podium + dynamic headlines based on statistical significance."""
+    """Dynamic headlines based on statistical significance."""
 
     render_info_box(
         "<strong>How to read this:</strong> "
@@ -275,85 +316,31 @@ def _render_headlines_view(user_db, num_sims):
         "while a faded <span class='wc-shift-positive' style='opacity: 0.6; font-size: 0.85em;'>+1.2%</span> could just be simulation noise."
     )
 
-    user_finish = get_user_all_team_best_finish(user_db, num_sims)
-    baseline_finish = get_baseline_all_team_best_finish()
-    base_score_dict = dict(zip(baseline_finish["team"], baseline_finish["avg_stage_score"]))
-    
-    # 1. Find teams with statistically significant shifts in avg_stage_score
-    sig_mean_teams = []
-    for _, row in user_finish.iterrows():
-        team = row["team"]
-        user_sc = row["avg_stage_score"]
-        user_sd = row["stddev_stage_score"]
-        base_sc = base_score_dict.get(team, 0.0)
-        
-        if is_stat_sig_mean(user_sc, base_sc, user_sd, num_sims):
-            shift = user_sc - base_sc
-            sig_mean_teams.append({
-                "team": team,
-                "shift": shift,
-                "user_score": user_sc,
-                "base_score": base_sc,
-            })
-            
-    # Sort by magnitude of shift
-    sig_mean_teams.sort(key=lambda t: abs(t["shift"]), reverse=True)
-    
+    overrides = st.session_state.get("sim_user_overrides", {})
+    headlines = generate_headlines(user_db, num_sims, overrides, max_headlines=6)
+
     st.markdown("<br>", unsafe_allow_html=True)
     st.markdown('<div class="wc-section-sub">Data-Driven Headlines</div>', unsafe_allow_html=True)
-    
-    highlighted_teams = []
-    
-    if not sig_mean_teams:
+
+    if not headlines:
         st.info("No statistically significant shifts detected. Try making larger rank adjustments to see meaningful impacts.")
     else:
-        count = 0
-        overrides = st.session_state.get("sim_user_overrides", {})
-        for t_data in sig_mean_teams:
-            if count >= 4:
-                break
-            team = t_data["team"]
-            shift = t_data["shift"]
-            flag = get_flag(team)
-            
-            user_stages = get_user_stage_reach_probs(user_db, num_sims, team)
-            base_stages = get_team_stage_reach_probs(team)
-            
-            max_sig_stage = None
-            max_sig_stage_shift = 0.0
-            
-            baseline_dict = dict(zip(base_stages["stage"], base_stages["probability"]))
-            for _, u_row in user_stages.iterrows():
-                stg = u_row["stage"]
-                if stg == "GROUP_STAGE":
-                    continue
-                u_prob = u_row["probability"]
-                b_prob = baseline_dict.get(stg, 0.0)
-                
-                if is_stat_sig_prop(u_prob, b_prob, num_sims):
-                    stg_shift = u_prob - b_prob
-                    if (shift > 0 and stg_shift > max_sig_stage_shift) or (shift < 0 and stg_shift < max_sig_stage_shift):
-                        max_sig_stage_shift = stg_shift
-                        max_sig_stage = u_row["display_name"]
-            
-            if shift > 0:
-                headline_type = "📉 BUTTERFLY EFFECT?" if team not in overrides else "📈 RISING STOCK"
-                if max_sig_stage:
-                    desc = f"{flag} <strong>{team}</strong> has mathematically improved their chances to reach the {max_sig_stage} by <span class='wc-shift-positive'>+{max_sig_stage_shift:.1f}%</span>."
-                else:
-                    desc = f"{flag} <strong>{team}</strong> has improved their expected Tournament Depth (+{shift:.2f})."
-            else:
-                headline_type = "📉 BUTTERFLY EFFECT" if team not in overrides else "⚠️ SLIPPING STANDARDS"
-                if max_sig_stage:
-                    desc = f"{flag} <strong>{team}</strong> has suffered a statistically significant drop in chances to reach the {max_sig_stage} (<span class='wc-shift-negative'>{max_sig_stage_shift:.1f}%</span>)."
-                else:
-                    desc = f"{flag} <strong>{team}</strong> has worsened their expected Tournament Depth ({shift:.2f})."
-                    
-            st.markdown(f"<div style='margin-bottom:0.8rem; font-size:1.05rem;'><strong>{headline_type}:</strong> {desc}</div>", unsafe_allow_html=True)
-            highlighted_teams.append(team)
-            count += 1
-            
-    # Show stats for teams in headlines
+        for h in headlines:
+            st.markdown(
+                f"<div style='margin-bottom:0.8rem; font-size:1.05rem;'>"
+                f"<strong>{h.emoji} {h.label}:</strong> {h.html}</div>",
+                unsafe_allow_html=True,
+            )
+
+    # Collect unique teams from headlines for stats section
+    highlighted_teams = []
+    seen = set()
+    for h in headlines:
+        for t in h.teams:
+            if t not in seen:
+                highlighted_teams.append(t)
+                seen.add(t)
+
     if highlighted_teams:
         st.markdown("<br>", unsafe_allow_html=True)
         st.markdown('<div class="wc-section-sub">Headline Team Stats</div>', unsafe_allow_html=True)
@@ -362,9 +349,6 @@ def _render_headlines_view(user_db, num_sims):
             base_stages = get_team_stage_reach_probs(team)
             flag = get_flag(team)
             with st.expander(f"{flag} {team} Stage-by-Stage Breakdown", expanded=False):
-                # We reuse the progression table component but wrap the rendering
-                # in a way that respects stat sig
-                
                 stage_order = [
                     ("GROUP_STAGE", "Group Stage"),
                     ("ROUND_OF_32", "Round of 32"),
@@ -374,29 +358,29 @@ def _render_headlines_view(user_db, num_sims):
                     ("FINAL", "Final"),
                     ("CHAMPION", "Champion"),
                 ]
-                
+
                 baseline_dict = dict(zip(base_stages["stage"], base_stages["probability"]))
-                
+
                 html = '<table class="wc-sim-results-table"><thead><tr>'
                 html += '<th>Stage</th><th>Your Sim</th><th>Baseline</th><th>Shift</th>'
                 html += '</tr></thead><tbody>'
-                
+
                 for stage_key, display in stage_order:
                     user_row = user_stages[user_stages["stage"] == stage_key]
                     u_prob = float(user_row["probability"].iloc[0]) if not user_row.empty else 0.0
                     b_prob = baseline_dict.get(stage_key, 0.0)
                     s = u_prob - b_prob
-                    
+
                     is_sig = False if stage_key == "GROUP_STAGE" else is_stat_sig_prop(u_prob, b_prob, num_sims)
                     shift_html = render_shift_badge(s, is_sig)
-                    
+
                     html += '<tr>'
                     html += f'<td>{display}</td>'
                     html += f'<td><strong>{u_prob:.1f}%</strong></td>'
                     html += f'<td>{b_prob:.1f}%</td>'
                     html += f'<td>{shift_html}</td>'
                     html += '</tr>'
-                
+
                 html += '</tbody></table>'
                 st.markdown(html, unsafe_allow_html=True)
 
@@ -559,9 +543,61 @@ st.markdown(
 render_info_box(
     "Adjust team FIFA rankings and run your own simulations to see how "
     "probabilities shift compared to the 100,000-simulation baseline. "
-    "Change any team's rank, hit <strong>Run Simulation</strong>, and "
-    "explore the results."
+    "Change any team's rank or tweak the advantage sliders below, hit "
+    "<strong>Run Simulation</strong>, and explore the results."
 )
+
+# ── Advantage sliders ────────────────────────────────────────────────────────
+
+st.markdown(
+    '<div class="wc-section-sub">Model Advantage Settings</div>',
+    unsafe_allow_html=True,
+)
+
+trained_host = st.session_state["sim_trained_host_discount"]
+trained_confed = st.session_state["sim_trained_confed_discount"]
+
+render_info_box(
+    "These sliders let you scale the model's learned advantages. "
+    "<strong>Normal</strong> uses the value the model learned from 1,400+ historical matches. "
+    "Move left to reduce the effect, or right to amplify it.<br><br>"
+    "<strong>Host Nation Advantage</strong> — Host teams historically perform better "
+    f"(the model learned a <strong>{trained_host:.0%}</strong> rank boost). "
+    "This affects the 3 co-hosts: USA, Canada, and Mexico.<br>"
+    "<strong>Strong Confederation Advantage</strong> — UEFA and CONMEBOL teams "
+    f"receive a smaller edge (learned: <strong>{trained_confed:.0%}</strong> rank boost) "
+    "reflecting historically stronger competition within those federations."
+)
+
+adv_col1, adv_col2 = st.columns(2)
+
+with adv_col1:
+    host_idx = st.select_slider(
+        "🏟️ Host Nation Advantage",
+        options=list(range(len(ADVANTAGE_LABELS))),
+        value=st.session_state["sim_host_adv_idx"],
+        format_func=lambda i: ADVANTAGE_LABELS[i],
+        key="sim_host_adv_slider",
+    )
+    st.session_state["sim_host_adv_idx"] = host_idx
+    host_mul = ADVANTAGE_MULTIPLIERS[host_idx]
+    if host_idx != ADVANTAGE_DEFAULT_IDX:
+        effective = trained_host * host_mul
+        st.caption(f"Effective boost: {effective:.0%} (trained: {trained_host:.0%} × {host_mul:.2f})")
+
+with adv_col2:
+    confed_idx = st.select_slider(
+        "⚽ Strong Confederation Advantage",
+        options=list(range(len(ADVANTAGE_LABELS))),
+        value=st.session_state["sim_confed_adv_idx"],
+        format_func=lambda i: ADVANTAGE_LABELS[i],
+        key="sim_confed_adv_slider",
+    )
+    st.session_state["sim_confed_adv_idx"] = confed_idx
+    confed_mul = ADVANTAGE_MULTIPLIERS[confed_idx]
+    if confed_idx != ADVANTAGE_DEFAULT_IDX:
+        effective = trained_confed * confed_mul
+        st.caption(f"Effective boost: {effective:.0%} (trained: {trained_confed:.0%} × {confed_mul:.2f})")
 
 # ── Rank adjustment UI ───────────────────────────────────────────────────────
 
@@ -695,7 +731,7 @@ with col_run:
         f"Run Simulation ({SIMULATOR_NUM_SIMS} sims)",
         type="primary",
         use_container_width=True,
-        disabled=not _has_rank_changes(),
+        disabled=not _has_any_changes(),
     ):
         _run_simulation()
         st.rerun()
@@ -706,6 +742,8 @@ with col_reset:
         st.session_state["sim_user_overrides"] = {}
         st.session_state["sim_expanded_team"] = None
         st.session_state["sim_has_results"] = False
+        st.session_state["sim_host_adv_idx"] = ADVANTAGE_DEFAULT_IDX
+        st.session_state["sim_confed_adv_idx"] = ADVANTAGE_DEFAULT_IDX
         if st.session_state.get("sim_user_db"):
             try:
                 st.session_state["sim_user_db"].close()

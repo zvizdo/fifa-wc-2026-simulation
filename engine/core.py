@@ -118,7 +118,8 @@ class Match:
     """Represents a single match in the tournament."""
     
     def __init__(self, number: int, city: Optional['HostCity'], stage: STAGE, 
-                 group: Optional['Group'] = None, rng: Optional[random.Random] = None):
+                 group: Optional['Group'] = None, rng: Optional[random.Random] = None,
+                 **kwargs):
         self.number = number
         self.city = city
         self.stage = stage

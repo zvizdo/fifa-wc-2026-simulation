@@ -197,6 +197,9 @@ class ModeledMatch(Match):
     """
 
     def __init__(self, *args, rho=-0.1, **kwargs):
+        # Extract discount multipliers before passing remaining kwargs to super
+        self.host_discount_mul = kwargs.pop("host_discount_mul", 1.0)
+        self.confed_discount_mul = kwargs.pop("confed_discount_mul", 1.0)
         super().__init__(*args, **kwargs)
         self.rho = rho
 
@@ -279,13 +282,25 @@ class ModeledMatch(Match):
         artifact = _load_expanded_model()
         pipeline = artifact["pipeline"]
 
-        # Build feature vectors for each team perspective
-        home_features = self._build_feature_row(self.home_team, self.away_team)
-        away_features = self._build_feature_row(self.away_team, self.home_team)
+        # Apply discount multipliers to the transformer if non-default
+        transformer = pipeline.steps[0][1]  # FullFeatureTransformer
+        orig_host = transformer.host_discount
+        orig_confed = transformer.confed_discount
+        try:
+            transformer.host_discount = orig_host * self.host_discount_mul
+            transformer.confed_discount = orig_confed * self.confed_discount_mul
 
-        # Predict expected goals
-        lambda_home = pipeline.predict(home_features)[0]
-        lambda_away = pipeline.predict(away_features)[0]
+            # Build feature vectors for each team perspective
+            home_features = self._build_feature_row(self.home_team, self.away_team)
+            away_features = self._build_feature_row(self.away_team, self.home_team)
+
+            # Predict expected goals
+            lambda_home = pipeline.predict(home_features)[0]
+            lambda_away = pipeline.predict(away_features)[0]
+        finally:
+            # Restore original values on the cached transformer
+            transformer.host_discount = orig_host
+            transformer.confed_discount = orig_confed
 
         # Build probability matrix via vectorized Poisson + inline Dixon-Coles
         prob_matrix = _build_prob_matrix(lambda_home, lambda_away, self.rho)
