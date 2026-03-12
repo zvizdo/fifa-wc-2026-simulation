@@ -4,7 +4,7 @@ Database queries for the City Explorer page.
 import pandas as pd
 import streamlit as st
 from db.connection import get_db
-from config import TOTAL_SIMS
+from db.connection import get_total_sims
 
 
 @st.cache_data
@@ -72,7 +72,7 @@ def get_city_knockout_matchups(city: str, stage: str | None = None, limit: int =
         )
         SELECT stage, match_number, team1, team2,
                COUNT(*) AS count,
-               ROUND(COUNT(*) * 100.0 / {TOTAL_SIMS}, 2) AS probability
+               ROUND(COUNT(*) * 100.0 / {get_total_sims()}, 2) AS probability
         FROM matchups
         GROUP BY stage, match_number, team1, team2
         ORDER BY match_number, count DESC

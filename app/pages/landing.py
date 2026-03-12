@@ -183,3 +183,8 @@ with c3:
     """,
         unsafe_allow_html=True,
     )
+
+st.markdown("<br><br>", unsafe_allow_html=True)
+col1, col2, col3 = st.columns([1, 2, 1])
+with col2:
+    st.page_link("pages/about.py", label="ℹ️ About the Project", width="stretch")

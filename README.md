@@ -14,41 +14,45 @@ An interactive Streamlit dashboard that visualizes the results of 100,000 FIFA W
 
 Each match is simulated by predicting the expected goals for both teams using a **Poisson regression model**, then sampling a scoreline from a bivariate Poisson distribution with a Dixon-Coles correction for low-scoring outcomes.
 
-### Baseline vs Expanded Model
+### Single Feature, Many Things Rolled In
 
-The **baseline model** uses a single feature — win expectation derived from the two teams' FIFA rankings:
-
-```
-win_exp = 1 / (1 + (rank / opp_rank) ^ shape)
-```
-
-The **expanded model** computes **7 transformed features** from 15 raw input columns, incorporating dynamic in-tournament ranks, offensive/defensive splits, and effective rank discounts for host advantage and confederation strength. Host and confederation effects are not modeled as separate binary features — instead, they are baked into every win-expectation calculation via effective rank discounts:
+The production model uses a **single feature** — offensive win expectation — which compresses a rich set of information into one number:
 
 ```
-eff_rank = rank × (1 - host_discount × is_host) × (1 - confed_discount × is_strong_confed)
+off_win_exp = 1 / (1 + (eff_off_rank / eff_opp_def_rank) ^ shape)
 ```
 
-### Features
+Where `eff_rank = rank × (1 - host_discount × is_host)`.
 
-| Feature | Description |
+This one formula captures five distinct signals:
+
+| Signal | How it's encoded |
 |---|---|
-| **Win expectation** | `1/(1+(eff_rank/eff_opp_rank)^shape)` using pre-tournament FIFA rankings, adjusted by host and confederation discounts |
-| **Current win expectation** | Same formula but using dynamic in-tournament ranks that evolve after each match via Elo-style updates |
-| **Rank shift** | Difference between current dynamic rank and base FIFA rank — captures momentum and form within the tournament |
-| **Opponent rank shift** | Same as above, for the opponent |
-| **Offensive win expectation** | Team's effective offensive rank vs opponent's effective defensive rank — measures attacking strength against the specific defensive quality faced |
-| **Defensive win expectation** | Team's effective defensive rank vs opponent's effective offensive rank — measures defensive resilience against the specific attacking threat |
-| **Stage weight** | Ordinal encoding of the competition round: 0 = group stage, 1 = round of 16 / quarter-finals / third-place, 2 = semi-finals / final |
+| **Pre-tournament quality** | Base FIFA ranking, initialized from the pre-tournament standings |
+| **In-tournament form** | Dynamic offensive rank evolves after each match via Elo-style updates — teams that score more than expected improve |
+| **Matchup specificity** | Offensive rank is compared against the *opponent's defensive rank*, not their overall rank — a clinical attack against a leaky defense reads differently than the same attack against a solid one |
+| **Host advantage** | Host nations receive a percentage discount on their effective rank, making the win-exp nonlinearly larger for evenly-matched games — where crowd effect matters most |
+| **Rank curvature** | The power `shape` controls how sharply win probability falls off with rank distance — tuned jointly with everything else via Optuna |
+
+The simplicity is deliberate. Feature ablation testing showed that adding win expectation from base rankings, current rankings, and defensive decomposition all introduced correlated signals that diluted rather than added predictive power. A single well-constructed feature generalizes better under the train-one-evaluate-rest CV protocol — the harshest test for simulation extrapolation.
 
 ### Dynamic Ranks
 
-Three types of Elo-style ranks are tracked per team throughout the tournament, all initialized to the team's FIFA ranking at kickoff:
+Three Elo-style ranks are tracked per team throughout the tournament, all starting at the team's pre-tournament FIFA ranking:
 
-- **General rank** — Updated based on match result (win/draw/loss). Beating a stronger opponent improves the rank more than beating a weaker one.
-- **Offensive rank** — Updated based on goals scored relative to the opponent's general quality. Scoring more than expected lowers (improves) the rank.
-- **Defensive rank** — Updated based on goals conceded relative to the opponent's general quality. Conceding fewer than expected lowers (improves) the rank.
+- **General rank** — Updated after each match based on result vs opponent quality.
+- **Offensive rank** — Updated based on goals scored relative to the opponent's general quality. Feeds directly into the `off_win_exp` feature.
+- **Defensive rank** — Updated based on goals conceded. Used as the opponent's defensive component in `off_win_exp`.
 
-The shift magnitude is controlled by a k-factor scaled by `log(1 + |rank_diff|)`, so upsets against much stronger/weaker opponents produce larger adjustments. All rank update parameters (shape, k-factors, goal cap) are tuned jointly with the model via Optuna.
+Update magnitude scales with `log(1 + |rank_diff|)` — upsets produce larger adjustments. All update parameters (shape, k-factors, goal cap) are tuned jointly with the model.
+
+**Mean reversion.** After each rank update, the dynamic rank is pulled partway back toward the team's base FIFA ranking:
+
+```
+new_rank = (1 - reversion_rate) × dynamic_rank + reversion_rate × base_rank
+```
+
+This matters because World Cup groups play only 3 matches before knockout. Without reversion, a single fluky result — a top side conceding an early own goal — can swing the offensive or defensive rank far enough to distort all subsequent predictions. Mean reversion anchors each dynamic rank to our best prior (the pre-tournament FIFA ranking) and controls how aggressively one match can revise it. The `reversion_rate` is tuned by Optuna alongside the other preprocessing parameters.
 
 ### Training
 
@@ -56,7 +60,9 @@ The shift magnitude is controlled by a k-factor scaled by `log(1 + |rank_diff|)`
 python -m model.train --n-trials 200 --seed 42
 ```
 
-This runs Optuna TPE hyperparameter search over 10 parameters (5 preprocessing + 3 feature transformer + 2 regressor), evaluating each trial with train-one-evaluate-rest CV — training on a single tournament and validating on all others, a harsher test to prevent overfitting. The final model is trained on all data and saved to `model/expanded_model.pkl`.
+Optuna TPE search over 9 hyperparameters: 6 controlling dynamic rank preprocessing (shape, k-factors, goal cap, reversion rate) and 3 controlling the feature transformer and regressor (feature shape, host discount, alpha). Each trial is evaluated with **train-one-evaluate-rest CV** — training on a single tournament (~128 rows) and validating on the remaining 6 (~720 rows). This harsher protocol favors models that extrapolate cleanly rather than ones that memorize training patterns.
+
+The final model is trained on all data and saved to `model/expanded_model.pkl`.
 
 ## Tech Stack
 
@@ -94,7 +100,6 @@ This runs Optuna TPE hyperparameter search over 10 parameters (5 preprocessing +
 │   ├── expanded_model.pkl  # Trained expanded model artifact
 │   ├── win_exp_model.pkl   # Trained baseline model artifact
 │   ├── win_exp_model_train.py   # Legacy baseline model training
-│   ├── win_exp_model_notes.md   # Baseline model notes
 │   ├── nb_eda_v2.ipynb     # Expanded model EDA & feature analysis
 │   ├── nb_eda.ipynb        # Baseline model EDA
 │   └── nb_dataset.ipynb    # Dataset preparation notebook

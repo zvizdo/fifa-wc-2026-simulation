@@ -14,6 +14,9 @@ from db.competition_queries import (
     get_head_to_head,
     get_group_position_probabilities,
 )
+from db.landing_queries import get_champion_probs
+from db.polymarket_queries import get_polymarket_odds
+from db.implied_rank_queries import get_implied_polymarket_ranks
 from db.team_queries import get_all_teams
 from ui.cards import (
     render_match_card,
@@ -41,20 +44,294 @@ render_info_box(
 )
 
 # --- Stage selector ---
+winner_stages = ["WINNER"] + KNOCKOUT_STAGES_UI
+winner_labels = {"WINNER": "🏆 Winner", **KNOCKOUT_STAGE_LABELS}
+
 selected_stage = st.pills(
     "Select Stage",
-    options=KNOCKOUT_STAGES_UI,
-    format_func=lambda x: KNOCKOUT_STAGE_LABELS[x],
-    default="FINAL",
+    options=winner_stages,
+    format_func=lambda x: winner_labels[x],
+    default="WINNER",
 )
 
 if not selected_stage:
-    selected_stage = "FINAL"
+    selected_stage = "WINNER"
 
 st.markdown("<br>", unsafe_allow_html=True)
 
+# --- Winner view ---
+if selected_stage == "WINNER":
+    st.markdown(
+        '<div class="wc-section-sub">Most Likely Champions</div>',
+        unsafe_allow_html=True,
+    )
+    st.caption(
+        "Top 10 teams most likely to win the FIFA World Cup 2026 based on 100,000 simulations, "
+        "compared with live prediction market odds from Polymarket."
+    )
+
+    view_mode = st.radio(
+        "View Mode",
+        options=["🏆 Simulation Results", "📈 Implied Ranks", "💰 Value Bets"],
+        horizontal=True,
+        label_visibility="collapsed"
+    )
+    poly_odds = get_polymarket_odds()
+
+    # Load actual FIFA ranks
+    import json, os
+    teams_path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+        "data", "wc_2026_teams.json",
+    )
+    actual_ranks = {}
+    try:
+        with open(teams_path) as f:
+            td = json.load(f)
+        actual_ranks = {t["name"]: t["fifa_rank"] for g in td["groups"].values() for t in g}
+    except Exception:
+        pass
+
+    if view_mode == "📈 Implied Ranks":
+        render_info_box(
+            "<strong>What is an Implied Rank?</strong> It translates the betting market's odds into a FIFA ranking. "
+            "If a team has a <strong>lower (better) Implied Rank</strong> than their actual FIFA rank, the betting market "
+            "thinks they are <strong>undervalued</strong> by FIFA and are stronger than their official ranking suggests. "
+            "If it's higher, the market thinks they are overvalued. <br><br>We calculate this by finding the exact "
+            "ranking configuration our simulation model would need to perfectly reproduce Polymarket's win probabilities.<br><br>"
+            "<strong>Note on Rank Spacing:</strong> The top market favorite (Spain) is anchored to Rank 1.0 to normalize the rankings. "
+            "Because betting markets assign an extremely high margin of probability to the few top favorites compared to the rest of the field, "
+            "the model must push the implied ranks of lower-tier teams considerably further down to match their proportionally smaller win shares."
+        )
+
+        implied = get_implied_polymarket_ranks()
+        if implied is None:
+            st.info("Implied rank data is unavailable. Ensure the rank simulation DB exists.")
+        else:
+            sorted_implied = sorted(
+                implied.items(), key=lambda x: x[1]["polymarket_pct"], reverse=True
+            )
+
+            for idx, (team, data) in enumerate(sorted_implied):
+                flag_t = get_flag(team)
+                actual = actual_ranks.get(team, "–")
+                imp = data["implied_rank"]
+                poly = data["polymarket_pct"]
+                
+                # Rank delta
+                if isinstance(actual, int):
+                    rank_delta = round(imp - actual, 1)
+                    rd_color = "#22C55E" if rank_delta < 0 else "#EF4444" if rank_delta > 0 else "var(--wc-secondary)"
+                    rd_sign = "+" if rank_delta > 0 else ""
+                    rank_delta_str = f'<span style="color:{rd_color}; font-weight:600;">{rd_sign}{rank_delta}</span>'
+                else:
+                    rank_delta_str = "–"
+
+                # Rank badge
+                rank = idx + 1
+                rank_colors = {
+                    1: ("var(--wc-gold)", "#000"),
+                    2: ("#C0C0C0", "#000"),
+                    3: ("#CD7F32", "#fff"),
+                }
+                badge_bg, badge_fg = rank_colors.get(rank, ("var(--wc-turquoise)", "#000"))
+
+                st.markdown(f'''
+                <div class="wc-card-flat" style="padding:1rem 1.25rem; margin-bottom:0.5rem; display:flex; align-items:center; gap:1rem;">
+                    <div style="min-width:2rem; text-align:center;">
+                        <span style="background:{badge_bg}; color:{badge_fg}; font-weight:700;
+                            font-size:0.85rem; padding:0.3rem 0.55rem; border-radius:6px;">{rank}</span>
+                    </div>
+                    <div style="font-size:1.8rem;">{flag_t}</div>
+                    <div style="flex:1;">
+                        <div style="font-weight:700; font-size:1.05rem;">{team}</div>
+                        <div style="display:flex; align-items:center; gap:0.4rem; margin-top:0.3rem;">
+                            <span class="wc-badge" style="background:rgba(255,255,255,0.05); color:var(--text-color); font-size:0.75rem; padding:0.2rem 0.5rem; border-radius:4px;">
+                                FIFA Rank: <strong>{actual}</strong>
+                            </span>
+                            <span class="wc-badge" style="background:rgba(255,255,255,0.05); color:var(--text-color); font-size:0.75rem; padding:0.2rem 0.5rem; border-radius:4px;">
+                                Implied: <strong>{imp}</strong> ({rank_delta_str})
+                            </span>
+                        </div>
+                    </div>
+                    <div style="text-align:right;">
+                        <div style="font-size:1.4rem; font-weight:700; color:#7289da;">{poly:.1f}%</div>
+                        <div style="font-size:0.7rem; color:#7289da; margin-top:0.15rem;">Polymarket</div>
+                    </div>
+                </div>
+                ''', unsafe_allow_html=True)
+                
+    elif view_mode == "💰 Value Bets":
+        render_info_box(
+            "<strong>What is Expected Value (EV)?</strong> It represents the expected monetary return on a hypothetical $100 bet "
+            "if we assume our simulation's win probabilities are completely accurate compared to Polymarket's odds. "
+            "You can buy <strong>YES</strong> if our model thinks a team is undervalued, or buy <strong>NO</strong> if they are overvalued."
+            "<br><br><span style='color:var(--wc-primary);'><i class='fas fa-info-circle'></i> <strong>Disclaimer:</strong> "
+            "This is a theoretical exercise based on a simulation model, not financial advice.</span>"
+        )
+        
+        champions = get_champion_probs(limit=100)
+        if not poly_odds:
+            st.info("Polymarket odds are currently unavailable.")
+        else:
+            ev_data = []
+            
+            # Focus on the top 12 Polymarket favorites to keep the list relevant
+            top_poly_teams = sorted(poly_odds.items(), key=lambda x: x[1].get("yes", 0), reverse=True)[:12]
+            
+            for team, probs in top_poly_teams:
+                poly_prob_yes = probs.get("yes", 0)
+                poly_prob_no = probs.get("no", 0)
+                
+                sim_row = champions[champions["team"] == team]
+                sim_prob = sim_row["probability"].values[0] if not sim_row.empty else 0.0
+                
+                if poly_prob_yes > 0:
+                    implied_decimal_yes = 100.0 / poly_prob_yes
+                    expected_return_yes = (sim_prob / 100.0) * implied_decimal_yes * 100.0
+                    ev_yes = expected_return_yes - 100.0
+                    
+                    ev_data.append({
+                        "team": team,
+                        "type": "YES",
+                        "poly_prob": poly_prob_yes,
+                        "sim_prob": sim_prob,
+                        "ev": ev_yes
+                    })
+                
+                if poly_prob_no > 0:
+                    sim_prob_no = 100.0 - sim_prob
+                    implied_decimal_no = 100.0 / poly_prob_no
+                    expected_return_no = (sim_prob_no / 100.0) * implied_decimal_no * 100.0
+                    ev_no = expected_return_no - 100.0
+                    
+                    ev_data.append({
+                        "team": team,
+                        "type": "NO",
+                        "poly_prob": poly_prob_no,
+                        "sim_prob": sim_prob_no,
+                        "ev": ev_no
+                    })
+            
+            # Sort by EV descending to highlight best value bets
+            ev_data.sort(key=lambda x: x["ev"], reverse=True)
+            
+            # Show top 10 value bets across both types
+            for idx, data in enumerate(ev_data[:10]):
+                team = data["team"]
+                b_type = data["type"]
+                poly_prob = data["poly_prob"]
+                sim_prob = data["sim_prob"]
+                ev = data["ev"]
+                
+                flag_t = get_flag(team)
+                
+                ev_color = "#22C55E" if ev > 0 else "#EF4444" if ev < 0 else "var(--wc-secondary)"
+                ev_sign = "+" if ev > 0 else ""
+                
+                # Green subtle background for positive EV
+                ev_bg = "rgba(34, 197, 94, 0.08)" if ev > 0 else "var(--card-bg)"
+                ev_border = "1px solid rgba(34, 197, 94, 0.3)" if ev > 0 else "1px solid rgba(255,255,255,0.05)"
+                
+                type_color = "var(--wc-primary)" if b_type == "YES" else "var(--wc-magenta)"
+                type_bg_span = "rgba(0, 180, 216, 0.15)" if b_type == "YES" else "rgba(230, 62, 109, 0.15)"
+                
+                st.markdown(f'''
+                <div class="wc-card-flat" style="padding:1rem 1.25rem; margin-bottom:0.5rem; display:flex; align-items:center; gap:1rem; background:{ev_bg}; border:{ev_border};">
+                    <div style="font-size:1.8rem; min-width:2.5rem; text-align:center;">{flag_t}</div>
+                    <div style="flex:1;">
+                        <div style="font-weight:700; font-size:1.05rem;">
+                            {team} <span style="font-size:0.75rem; background:{type_bg_span}; color:{type_color}; padding:0.15rem 0.4rem; border-radius:4px; margin-left:0.5rem; vertical-align:middle; font-weight:800;">BUY {b_type}</span>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:0.4rem; margin-top:0.3rem;">
+                            <span class="wc-badge" style="background:rgba(255,255,255,0.05); color:var(--text-color); font-size:0.75rem; padding:0.2rem 0.5rem; border-radius:4px;">
+                                Model {b_type}: <strong>{sim_prob:.1f}%</strong>
+                            </span>
+                            <span class="wc-badge" style="background:rgba(114,137,218,0.15); color:#7289da; font-size:0.75rem; padding:0.2rem 0.5rem; border-radius:4px;">
+                                Polymarket {b_type}: <strong>{poly_prob:.1f}%</strong>
+                            </span>
+                        </div>
+                    </div>
+                    <div style="text-align:right;">
+                        <div style="font-size:1.4rem; font-weight:700; color:{ev_color};">{ev_sign}${ev:.2f}</div>
+                        <div style="font-size:0.7rem; color:{ev_color}; opacity:0.8; margin-top:0.15rem;">Expected Value (per $100)</div>
+                    </div>
+                </div>
+                ''', unsafe_allow_html=True)
+                
+    else:
+        champions = get_champion_probs(limit=10)
+        for idx, row in champions.iterrows():
+            team = row["team"]
+            sim_prob = row["probability"]
+            flag = get_flag(team)
+
+            # Polymarket odds lookup
+            poly_prob = poly_odds.get(team, {}).get("yes") if poly_odds else None
+            poly_html = ""
+            if poly_prob is not None:
+                diff = sim_prob - poly_prob
+                diff_color = "#22C55E" if diff > 0 else "#EF4444" if diff < 0 else "var(--wc-secondary)"
+                diff_sign = "+" if diff > 0 else ""
+                poly_html = (
+                    f'<div style="display:flex; align-items:center; gap:0.4rem; margin-top:0.3rem;">'
+                    f'<span class="wc-badge" style="background:rgba(114,137,218,0.15); color:#7289da; '
+                    f'font-size:0.75rem; padding:0.2rem 0.5rem; border-radius:4px; font-weight:600;">'
+                    f'Polymarket {poly_prob:.1f}%</span>'
+                    f'<span style="font-size:0.75rem; color:{diff_color}; font-weight:600;">'
+                    f'({diff_sign}{diff:.1f}%)</span>'
+                    f'</div>'
+                )
+            else:
+                poly_html = (
+                    '<div style="margin-top:0.3rem;">'
+                    '<span style="font-size:0.75rem; color:var(--wc-secondary); font-style:italic;">'
+                    'Polymarket: n/a</span></div>'
+                )
+
+            # Rank badge
+            rank = idx + 1
+            rank_colors = {
+                1: ("var(--wc-gold)", "#000"),
+                2: ("#C0C0C0", "#000"),
+                3: ("#CD7F32", "#fff"),
+            }
+            badge_bg, badge_fg = rank_colors.get(rank, ("var(--wc-turquoise)", "#000"))
+
+            st.markdown(f'''
+            <div class="wc-card-flat" style="padding:1rem 1.25rem; margin-bottom:0.5rem; display:flex; align-items:center; gap:1rem;">
+                <div style="min-width:2rem; text-align:center;">
+                    <span style="background:{badge_bg}; color:{badge_fg}; font-weight:700;
+                        font-size:0.85rem; padding:0.3rem 0.55rem; border-radius:6px;">{rank}</span>
+                </div>
+                <div style="font-size:1.8rem;">{flag}</div>
+                <div style="flex:1;">
+                    <div style="font-weight:700; font-size:1.05rem;">{team}</div>
+                    {poly_html}
+                </div>
+                <div style="text-align:right;">
+                    <div style="font-size:1.4rem; font-weight:700; color:var(--wc-turquoise);">{sim_prob:.1f}%</div>
+                    <div style="font-size:0.7rem; color:var(--wc-secondary); margin-top:0.15rem;">Simulation</div>
+                </div>
+            </div>
+            ''', unsafe_allow_html=True)
+
+    # Attribution / Link
+    st.markdown("<br>", unsafe_allow_html=True)
+    if poly_odds:
+        st.caption(
+            "Polymarket odds are fetched live from the "
+            "[2026 FIFA World Cup Winner](https://polymarket.com/event/2026-fifa-world-cup-winner-595) "
+            "prediction market and cached for 8 hours."
+        )
+    else:
+        st.caption(
+            "⚠️ Could not load Polymarket odds. Showing simulation data only. "
+            "[View on Polymarket →](https://polymarket.com/event/2026-fifa-world-cup-winner-595)"
+        )
+
 # --- Head-to-Head view ---
-if selected_stage == "HEAD_TO_HEAD":
+elif selected_stage == "HEAD_TO_HEAD":
     st.markdown(
         '<div class="wc-section-sub">Head-to-Head Knockout Matchup Analyzer</div>',
         unsafe_allow_html=True,

@@ -2,7 +2,6 @@
 Global constants for the FIFA World Cup 2026 Simulation Explorer app.
 """
 
-TOTAL_SIMS = 10_000
 
 # --- FIFA 2026 Color Palette ---
 PRIMARY_TURQUOISE = "#00B4D8"
@@ -117,5 +116,5 @@ OUTCOME_ORDER = [
 GROUP_NAMES = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L"]
 
 # --- Simulator ---
-SIMULATOR_NUM_SIMS = 100
+SIMULATOR_NUM_SIMS = 225
 SIMULATOR_BASE_SEED = 2026

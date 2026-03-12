@@ -4,7 +4,7 @@ Database queries for the Landing page.
 import pandas as pd
 import streamlit as st
 from db.connection import get_db
-from config import TOTAL_SIMS
+from db.connection import get_total_sims
 
 
 @st.cache_data
@@ -16,7 +16,7 @@ def get_champion_probs(limit: int = 3) -> pd.DataFrame:
     con = get_db()
     return con.execute(f"""
         SELECT winner AS team, COUNT(*) AS count,
-               ROUND(COUNT(*) * 100.0 / {TOTAL_SIMS}, 2) AS probability
+               ROUND(COUNT(*) * 100.0 / {get_total_sims()}, 2) AS probability
         FROM matches
         WHERE match_number = 104
         GROUP BY winner
@@ -36,7 +36,7 @@ def get_runner_up_probs(limit: int = 3) -> pd.DataFrame:
         SELECT
             CASE WHEN winner = home_team THEN away_team ELSE home_team END AS team,
             COUNT(*) AS count,
-            ROUND(COUNT(*) * 100.0 / {TOTAL_SIMS}, 2) AS probability
+            ROUND(COUNT(*) * 100.0 / {get_total_sims()}, 2) AS probability
         FROM matches
         WHERE match_number = 104
         GROUP BY team
@@ -54,7 +54,7 @@ def get_third_place_probs(limit: int = 3) -> pd.DataFrame:
     con = get_db()
     return con.execute(f"""
         SELECT winner AS team, COUNT(*) AS count,
-               ROUND(COUNT(*) * 100.0 / {TOTAL_SIMS}, 2) AS probability
+               ROUND(COUNT(*) * 100.0 / {get_total_sims()}, 2) AS probability
         FROM matches
         WHERE match_number = 103
         GROUP BY winner
@@ -75,7 +75,7 @@ def get_most_likely_final() -> pd.DataFrame:
             CASE WHEN home_team < away_team THEN home_team ELSE away_team END AS team1,
             CASE WHEN home_team < away_team THEN away_team ELSE home_team END AS team2,
             COUNT(*) AS count,
-            ROUND(COUNT(*) * 100.0 / {TOTAL_SIMS}, 2) AS probability
+            ROUND(COUNT(*) * 100.0 / {get_total_sims()}, 2) AS probability
         FROM matches
         WHERE match_number = 104
         GROUP BY team1, team2
@@ -102,7 +102,7 @@ def get_dark_horse(rank_cutoff: int = 15) -> pd.DataFrame:
             SELECT DISTINCT team, fifa_rank FROM group_standings
         )
         SELECT s.team, r.fifa_rank, COUNT(*) AS count,
-               ROUND(COUNT(*) * 100.0 / {TOTAL_SIMS}, 2) AS probability
+               ROUND(COUNT(*) * 100.0 / {get_total_sims()}, 2) AS probability
         FROM sf_teams s
         JOIN team_ranks r ON s.team = r.team
         WHERE r.fifa_rank > ?
@@ -174,7 +174,7 @@ def get_baseline_all_team_best_finish() -> pd.DataFrame:
         )
         SELECT cs.team,
                ROUND(AVG(cs.stage_score), 3) AS avg_stage_score,
-               COALESCE(ROUND(c.wins * 100.0 / {TOTAL_SIMS}, 2), 0) AS champ_prob
+               COALESCE(ROUND(c.wins * 100.0 / {get_total_sims()}, 2), 0) AS champ_prob
         FROM combined_scores cs
         LEFT JOIN champs c ON c.team = cs.team
         GROUP BY cs.team, c.wins

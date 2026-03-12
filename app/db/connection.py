@@ -13,3 +13,12 @@ DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "wc20
 def get_db() -> duckdb.DuckDBPyConnection:
     """Return a cached read-only DuckDB connection."""
     return duckdb.connect(DB_PATH, read_only=True)
+
+
+@st.cache_data
+def get_total_sims() -> int:
+    con = get_db()
+    try:
+        return con.execute("SELECT COUNT(*) FROM matches WHERE stage = 'FINAL'").fetchone()[0]
+    except duckdb.Error:
+        return 100_000

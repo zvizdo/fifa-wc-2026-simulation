@@ -4,7 +4,7 @@ Database queries for the Team Explorer page.
 import pandas as pd
 import streamlit as st
 from db.connection import get_db
-from config import TOTAL_SIMS
+from db.connection import get_total_sims
 
 
 @st.cache_data
@@ -77,7 +77,7 @@ def get_team_outcome_distribution(team: str) -> pd.DataFrame:
             SELECT sim_id, outcome FROM team_outcomes
         )
         SELECT outcome, COUNT(*) AS count,
-               ROUND(COUNT(*) * 100.0 / {TOTAL_SIMS}, 2) AS probability
+               ROUND(COUNT(*) * 100.0 / {get_total_sims()}, 2) AS probability
         FROM all_sims
         GROUP BY outcome
         ORDER BY count DESC
@@ -94,14 +94,14 @@ def get_team_stage_reach_probs(team: str) -> pd.DataFrame:
     con = get_db()
     # Get group position probabilities
     group_adv = con.execute(f"""
-        SELECT SUM(CASE WHEN advanced THEN 1 ELSE 0 END) * 100.0 / {TOTAL_SIMS} AS adv_pct
+        SELECT SUM(CASE WHEN advanced THEN 1 ELSE 0 END) * 100.0 / {get_total_sims()} AS adv_pct
         FROM group_standings WHERE team = ?
     """, [team]).fetchone()[0]
 
     # Appearance in each knockout stage
     knockout_probs = con.execute(f"""
         SELECT stage, COUNT(DISTINCT sim_id) AS appearances,
-               ROUND(COUNT(DISTINCT sim_id) * 100.0 / {TOTAL_SIMS}, 2) AS probability
+               ROUND(COUNT(DISTINCT sim_id) * 100.0 / {get_total_sims()}, 2) AS probability
         FROM matches
         WHERE (home_team = ? OR away_team = ?) AND stage != 'GROUP_STAGE'
         GROUP BY stage
@@ -112,7 +112,7 @@ def get_team_stage_reach_probs(team: str) -> pd.DataFrame:
         SELECT COUNT(*) AS cnt FROM matches
         WHERE match_number = 104 AND winner = ?
     """, [team]).fetchone()[0]
-    champion_pct = round(champion * 100.0 / TOTAL_SIMS, 2)
+    champion_pct = round(champion * 100.0 / get_total_sims(), 2)
 
     stage_map = {
         "ROUND_OF_32": "Round of 32",
@@ -145,7 +145,7 @@ def get_team_group_position_probs(team: str) -> pd.DataFrame:
     con = get_db()
     return con.execute(f"""
         SELECT position, COUNT(*) AS count,
-               ROUND(COUNT(*) * 100.0 / {TOTAL_SIMS}, 2) AS probability
+               ROUND(COUNT(*) * 100.0 / {get_total_sims()}, 2) AS probability
         FROM group_standings
         WHERE team = ?
         GROUP BY position

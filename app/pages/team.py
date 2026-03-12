@@ -114,7 +114,7 @@ with col_left:
     outcomes = get_team_outcome_distribution(selected_team)
     if not outcomes.empty:
         fig = create_outcome_bar_chart(outcomes, selected_team)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
 with col_right:
     st.markdown('<div class="wc-section-sub">Group Stage Finish</div>', unsafe_allow_html=True)

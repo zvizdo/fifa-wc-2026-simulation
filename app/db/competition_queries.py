@@ -4,7 +4,7 @@ Database queries for the Competition Explorer page.
 import pandas as pd
 import streamlit as st
 from db.connection import get_db
-from config import TOTAL_SIMS
+from db.connection import get_total_sims
 
 
 @st.cache_data
@@ -49,7 +49,7 @@ def get_stage_matchups(stage: str, limit: int = 5) -> pd.DataFrame:
             CASE WHEN home_team < away_team THEN home_team ELSE away_team END AS team1,
             CASE WHEN home_team < away_team THEN away_team ELSE home_team END AS team2,
             COUNT(*) AS count,
-            ROUND(COUNT(*) * 100.0 / {TOTAL_SIMS}, 2) AS probability
+            ROUND(COUNT(*) * 100.0 / {get_total_sims()}, 2) AS probability
         FROM matches
         WHERE stage = ?
         GROUP BY team1, team2
@@ -128,7 +128,7 @@ def get_all_groups_most_likely() -> pd.DataFrame:
         ),
         counted AS (
             SELECT group_name, team_order, COUNT(*) AS count,
-                   ROUND(COUNT(*) * 100.0 / {TOTAL_SIMS}, 2) AS probability,
+                   ROUND(COUNT(*) * 100.0 / {get_total_sims()}, 2) AS probability,
                    ROW_NUMBER() OVER (PARTITION BY group_name ORDER BY COUNT(*) DESC) AS rn
             FROM group_outcomes
             GROUP BY group_name, team_order
@@ -208,7 +208,7 @@ def get_group_scenarios(group_name: str, limit: int = 5) -> list[dict]:
             GROUP BY sim_id
         )
         SELECT team_order, COUNT(*) AS count,
-               ROUND(COUNT(*) * 100.0 / {TOTAL_SIMS}, 2) AS probability
+               ROUND(COUNT(*) * 100.0 / {get_total_sims()}, 2) AS probability
         FROM group_outcomes
         GROUP BY team_order
         ORDER BY count DESC
@@ -243,7 +243,7 @@ def get_third_place_advancement() -> tuple[pd.DataFrame, pd.DataFrame]:
     teams_df = con.execute(f"""
         SELECT team,
                MODE(group_name) AS group_name,
-               ROUND(SUM(CASE WHEN advanced THEN 1 ELSE 0 END) * 100.0 / {TOTAL_SIMS}, 1) AS adv_pct,
+               ROUND(SUM(CASE WHEN advanced THEN 1 ELSE 0 END) * 100.0 / {get_total_sims()}, 1) AS adv_pct,
                ROUND(AVG(points), 1) AS avg_points,
                ROUND(AVG(goal_difference), 1) AS avg_gd
         FROM third_place_ranks
@@ -254,7 +254,7 @@ def get_third_place_advancement() -> tuple[pd.DataFrame, pd.DataFrame]:
 
     groups_df = con.execute(f"""
         SELECT group_name,
-               ROUND(SUM(CASE WHEN advanced THEN 1 ELSE 0 END) * 100.0 / {TOTAL_SIMS}, 1) AS adv_pct
+               ROUND(SUM(CASE WHEN advanced THEN 1 ELSE 0 END) * 100.0 / {get_total_sims()}, 1) AS adv_pct
         FROM group_standings
         WHERE position = 3
         GROUP BY group_name
@@ -274,7 +274,7 @@ def get_stage_winner_probs(stage: str, match_number: int | None = None) -> pd.Da
     if match_number is not None:
         return con.execute(f"""
             SELECT winner AS team, COUNT(*) AS count,
-                   ROUND(COUNT(*) * 100.0 / {TOTAL_SIMS}, 2) AS probability
+                   ROUND(COUNT(*) * 100.0 / {get_total_sims()}, 2) AS probability
             FROM matches
             WHERE match_number = ?
             GROUP BY winner
@@ -283,7 +283,7 @@ def get_stage_winner_probs(stage: str, match_number: int | None = None) -> pd.Da
 
     return con.execute(f"""
         SELECT winner AS team, COUNT(*) AS count,
-               ROUND(COUNT(*) * 100.0 / {TOTAL_SIMS}, 2) AS probability
+               ROUND(COUNT(*) * 100.0 / {get_total_sims()}, 2) AS probability
         FROM matches
         WHERE stage = ?
         GROUP BY winner
@@ -317,7 +317,7 @@ def get_head_to_head(team1: str, team2: str) -> dict | None:
         return None
 
     meeting_count = int(raw["cnt"].sum())
-    meeting_pct = round(meeting_count * 100.0 / TOTAL_SIMS, 2)
+    meeting_pct = round(meeting_count * 100.0 / get_total_sims(), 2)
 
     # Stage distribution
     stage_counts = raw.groupby("stage")["cnt"].sum()
@@ -329,7 +329,7 @@ def get_head_to_head(team1: str, team2: str) -> dict | None:
             "stage": stage,
             "stage_label": STAGE_DISPLAY_NAMES.get(stage, stage),
             "count": cnt,
-            "abs_pct": round(cnt * 100.0 / TOTAL_SIMS, 2),
+            "abs_pct": round(cnt * 100.0 / get_total_sims(), 2),
             "rel_pct": round(cnt * 100.0 / meeting_count, 1),
         })
     stage_distribution.sort(key=lambda x: x["abs_pct"], reverse=True)
@@ -375,7 +375,7 @@ def get_group_position_probabilities(group_name: str) -> pd.DataFrame:
     # 2. Get probabilities per position
     probs = con.execute(f"""
         SELECT team, position,
-               ROUND(COUNT(*) * 100.0 / {TOTAL_SIMS}, 1) as prob
+               ROUND(COUNT(*) * 100.0 / {get_total_sims()}, 1) as prob
         FROM group_standings
         WHERE group_name = ?
         GROUP BY team, position

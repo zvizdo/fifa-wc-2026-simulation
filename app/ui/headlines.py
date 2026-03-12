@@ -113,47 +113,61 @@ def _champion_flip_headlines(
                 category="champion",
             ))
 
-    # 2. New entrants to the top-5
-    for team in user_top5:
-        if team not in base_top5 and team != user_leader:
-            user_prob = user_dict.get(team, 0)
-            base_prob = base_dict.get(team, 0)
-            if _is_stat_sig_prop(user_prob, base_prob, num_sims):
-                flag = get_flag(team)
-                headlines.append(Headline(
-                    emoji="🏆",
-                    label="NEW CONTENDER",
-                    html=(
-                        f"{flag} <strong>{team}</strong> has entered the top-5 "
-                        f"championship favorites "
-                        f"(<span class='wc-shift-positive'>"
-                        f"{base_prob:.1f}% → {user_prob:.1f}%</span>)."
-                    ),
-                    priority=15 + abs(user_prob - base_prob),
-                    teams=[team],
-                    category="champion",
-                ))
+    base_top5 = list(base_champs.head(5)["team"])
 
-    # 3. Teams dropped out of top-5
-    for team in base_top5:
-        if team not in user_top5 and not any(team in h.teams for h in headlines):
-            user_prob = user_dict.get(team, 0)
-            base_prob = base_dict.get(team, 0)
-            if _is_stat_sig_prop(user_prob, base_prob, num_sims):
-                flag = get_flag(team)
-                headlines.append(Headline(
-                    emoji="📉",
-                    label="FALLEN FAVORITE",
-                    html=(
-                        f"{flag} <strong>{team}</strong> has dropped out of the top-5 "
-                        f"favorites "
-                        f"(<span class='wc-shift-negative'>"
-                        f"{base_prob:.1f}% → {user_prob:.1f}%</span>)."
-                    ),
-                    priority=14 + abs(base_prob - user_prob),
-                    teams=[team],
-                    category="champion",
-                ))
+    # 2. All stat-sig positive shifts (New Contenders / Growing Favorites)
+    for team, user_prob in user_dict.items():
+        if team == user_leader and any(h.label == "DETHRONED" for h in headlines):
+            continue  # Already covered by DETHRONED
+            
+        base_prob = base_dict.get(team, 0)
+        if user_prob > base_prob and _is_stat_sig_prop(user_prob, base_prob, num_sims):
+            # Must reach beyond 3.5% to be considered a contender
+            if user_prob <= 3.5:
+                continue
+                
+            flag = get_flag(team)
+            # Differentiate those already in the elite tier vs newcomers
+            label = "GROWING FAVORITE" if team in base_top5 else "NEW CONTENDER"
+            emoji = "📈" if label == "GROWING FAVORITE" else "🏆"
+            headlines.append(Headline(
+                emoji=emoji,
+                label=label,
+                html=(
+                    f"{flag} <strong>{team}</strong> has seen a significant boost to their "
+                    f"championship chances "
+                    f"(<span class='wc-shift-positive'>"
+                    f"{base_prob:.1f}% → {user_prob:.1f}%</span>)."
+                ),
+                priority=15 + abs(user_prob - base_prob),
+                teams=[team],
+                category="champion",
+            ))
+
+    # 3. All stat-sig negative shifts (Fallen Favorites)
+    for team, base_prob in base_dict.items():
+        user_prob = user_dict.get(team, 0)
+        if user_prob < base_prob and _is_stat_sig_prop(user_prob, base_prob, num_sims):
+            # Must have started as a favorite (>3.5%) to fall
+            if base_prob <= 3.5:
+                continue
+                
+            if any(team in h.teams for h in headlines):
+                continue
+            flag = get_flag(team)
+            headlines.append(Headline(
+                emoji="📉",
+                label="FALLEN FAVORITE",
+                html=(
+                    f"{flag} <strong>{team}</strong>'s championship chances have taken a "
+                    f"statistically significant hit "
+                    f"(<span class='wc-shift-negative'>"
+                    f"{base_prob:.1f}% → {user_prob:.1f}%</span>)."
+                ),
+                priority=14 + abs(base_prob - user_prob),
+                teams=[team],
+                category="champion",
+            ))
 
     return headlines
 

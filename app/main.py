@@ -23,6 +23,7 @@ pages = [
     st.Page("pages/team.py", title="Team Explorer", icon="\u26bd"),
     st.Page("pages/city.py", title="City Explorer", icon="\U0001f3d9\ufe0f"),
     st.Page("pages/simulator.py", title="Simulator", icon="\U0001f3ae"),
+    st.Page("pages/about.py", title="About Project", icon="\u2139\ufe0f"),
 ]
 
 pg = st.navigation(pages, position="hidden")
@@ -43,19 +44,19 @@ with st.container(key="desktop_nav"):
 with st.container(key="mobile_nav"):
     with st.expander("🏆 FIFA WC 2026  ·  Menu", expanded=False):
         st.page_link(
-            "pages/landing.py", label="\U0001f3c6 Home", use_container_width=True
+            "pages/landing.py", label="\U0001f3c6 Home", width="stretch"
         )
         st.page_link(
             "pages/competition.py",
             label="\U0001f4ca Competition",
-            use_container_width=True,
+            width="stretch",
         )
-        st.page_link("pages/team.py", label="\u26bd Teams", use_container_width=True)
+        st.page_link("pages/team.py", label="\u26bd Teams", width="stretch")
         st.page_link(
-            "pages/city.py", label="\U0001f3d9\ufe0f City", use_container_width=True
+            "pages/city.py", label="\U0001f3d9\ufe0f City", width="stretch"
         )
         st.page_link(
-            "pages/simulator.py", label="\U0001f3ae Simulator", use_container_width=True
+            "pages/simulator.py", label="\U0001f3ae Simulator", width="stretch"
         )
 
 st.divider()

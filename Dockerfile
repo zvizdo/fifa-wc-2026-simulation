@@ -29,4 +29,4 @@ HEALTHCHECK CMD curl --fail http://localhost:8080/_stcore/health
 # Command to run the application
 CMD ["streamlit", "run","app/main.py", "--server.port=8080", "--server.address=0.0.0.0"]
 
-# gcloud run deploy fifa-wc-2026-simulation --source . --project as-dev-anze --region=us-central1 --platform=managed --min-instances=1 --session-affinity --allow-unauthenticated   
+# gcloud run deploy fifa-wc-2026-simulation --source . --project as-dev-anze --region=us-central1 --platform=managed --min-instances=0 --max-instances=2 --session-affinity --allow-unauthenticated --cpu=2 --memory=4Gi   

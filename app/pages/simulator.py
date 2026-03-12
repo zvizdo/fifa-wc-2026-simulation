@@ -63,12 +63,12 @@ ADVANTAGE_LABELS = ["None", "Minimal", "Small", "Medium", "Normal", "Boosted", "
 ADVANTAGE_DEFAULT_IDX = 4  # "Normal"
 
 def _load_trained_discounts():
-    """Read the trained host_discount and confed_discount from the model."""
+    """Read the trained host_discount from the model."""
     model_path = Path(_ROOT) / "model" / "expanded_model.pkl"
     with open(model_path, "rb") as f:
         artifact = pickle.load(f)
     transformer = artifact["pipeline"].steps[0][1]
-    return transformer.host_discount, transformer.confed_discount
+    return transformer.host_discount
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -138,14 +138,12 @@ def _init_state():
     st.session_state["sim_has_results"] = False
     st.session_state["sim_user_db"] = None
 
-    # Advantage slider defaults
+    # Advantage slider default
     st.session_state["sim_host_adv_idx"] = ADVANTAGE_DEFAULT_IDX
-    st.session_state["sim_confed_adv_idx"] = ADVANTAGE_DEFAULT_IDX
 
     # Cache trained discount values for display
-    host_d, confed_d = _load_trained_discounts()
+    host_d = _load_trained_discounts()
     st.session_state["sim_trained_host_discount"] = host_d
-    st.session_state["sim_trained_confed_discount"] = confed_d
 
 
 def _rebuild_ranks():
@@ -200,10 +198,7 @@ def _has_any_changes() -> bool:
     adj = st.session_state["sim_adjusted_ranks"]
     dfl = st.session_state["sim_default_ranks"]
     rank_changed = any(adj[t] != dfl[t] for t in adj)
-    adv_changed = (
-        st.session_state["sim_host_adv_idx"] != ADVANTAGE_DEFAULT_IDX
-        or st.session_state["sim_confed_adv_idx"] != ADVANTAGE_DEFAULT_IDX
-    )
+    adv_changed = st.session_state["sim_host_adv_idx"] != ADVANTAGE_DEFAULT_IDX
     return rank_changed or adv_changed
 
 
@@ -273,14 +268,11 @@ def _run_simulation():
 
     total_cpus = os.cpu_count() or 4
     num_workers = max(2, int(total_cpus / 2) - 1)
-    # Build match_kwargs from advantage sliders
+    # Build match_kwargs from advantage slider
     host_mul = ADVANTAGE_MULTIPLIERS[st.session_state["sim_host_adv_idx"]]
-    confed_mul = ADVANTAGE_MULTIPLIERS[st.session_state["sim_confed_adv_idx"]]
     match_kwargs = {}
     if host_mul != 1.0:
         match_kwargs["host_discount_mul"] = host_mul
-    if confed_mul != 1.0:
-        match_kwargs["confed_discount_mul"] = confed_mul
 
     tasks = [(teams_data, i, match_kwargs) for i in range(num_sims)]
     
@@ -555,49 +547,28 @@ st.markdown(
 )
 
 trained_host = st.session_state["sim_trained_host_discount"]
-trained_confed = st.session_state["sim_trained_confed_discount"]
 
 render_info_box(
-    "These sliders let you scale the model's learned advantages. "
+    "This slider lets you scale the model's learned host nation advantage. "
     "<strong>Normal</strong> uses the value the model learned from 1,400+ historical matches. "
     "Move left to reduce the effect, or right to amplify it.<br><br>"
     "<strong>Host Nation Advantage</strong> — Host teams historically perform better "
     f"(the model learned a <strong>{trained_host:.0%}</strong> rank boost). "
-    "This affects the 3 co-hosts: USA, Canada, and Mexico.<br>"
-    "<strong>Strong Confederation Advantage</strong> — UEFA and CONMEBOL teams "
-    f"receive a smaller edge (learned: <strong>{trained_confed:.0%}</strong> rank boost) "
-    "reflecting historically stronger competition within those federations."
+    "This affects the 3 co-hosts: USA, Canada, and Mexico."
 )
 
-adv_col1, adv_col2 = st.columns(2)
-
-with adv_col1:
-    host_idx = st.select_slider(
-        "🏟️ Host Nation Advantage",
-        options=list(range(len(ADVANTAGE_LABELS))),
-        value=st.session_state["sim_host_adv_idx"],
-        format_func=lambda i: ADVANTAGE_LABELS[i],
-        key="sim_host_adv_slider",
-    )
-    st.session_state["sim_host_adv_idx"] = host_idx
-    host_mul = ADVANTAGE_MULTIPLIERS[host_idx]
-    if host_idx != ADVANTAGE_DEFAULT_IDX:
-        effective = trained_host * host_mul
-        st.caption(f"Effective boost: {effective:.0%} (trained: {trained_host:.0%} × {host_mul:.2f})")
-
-with adv_col2:
-    confed_idx = st.select_slider(
-        "⚽ Strong Confederation Advantage",
-        options=list(range(len(ADVANTAGE_LABELS))),
-        value=st.session_state["sim_confed_adv_idx"],
-        format_func=lambda i: ADVANTAGE_LABELS[i],
-        key="sim_confed_adv_slider",
-    )
-    st.session_state["sim_confed_adv_idx"] = confed_idx
-    confed_mul = ADVANTAGE_MULTIPLIERS[confed_idx]
-    if confed_idx != ADVANTAGE_DEFAULT_IDX:
-        effective = trained_confed * confed_mul
-        st.caption(f"Effective boost: {effective:.0%} (trained: {trained_confed:.0%} × {confed_mul:.2f})")
+host_idx = st.select_slider(
+    "Host Nation Advantage",
+    options=list(range(len(ADVANTAGE_LABELS))),
+    value=st.session_state["sim_host_adv_idx"],
+    format_func=lambda i: ADVANTAGE_LABELS[i],
+    key="sim_host_adv_slider",
+)
+st.session_state["sim_host_adv_idx"] = host_idx
+host_mul = ADVANTAGE_MULTIPLIERS[host_idx]
+if host_idx != ADVANTAGE_DEFAULT_IDX:
+    effective = trained_host * host_mul
+    st.caption(f"Effective boost: {effective:.0%} (trained: {trained_host:.0%} x {host_mul:.2f})")
 
 # ── Rank adjustment UI ───────────────────────────────────────────────────────
 
@@ -730,20 +701,19 @@ with col_run:
     if st.button(
         f"Run Simulation ({SIMULATOR_NUM_SIMS} sims)",
         type="primary",
-        use_container_width=True,
+        width="stretch",
         disabled=not _has_any_changes(),
     ):
         _run_simulation()
         st.rerun()
 
 with col_reset:
-    if st.button("Reset All Ranks", use_container_width=True):
+    if st.button("Reset All Ranks", width="stretch"):
         st.session_state["sim_adjusted_ranks"] = dict(defaults)
         st.session_state["sim_user_overrides"] = {}
         st.session_state["sim_expanded_team"] = None
         st.session_state["sim_has_results"] = False
         st.session_state["sim_host_adv_idx"] = ADVANTAGE_DEFAULT_IDX
-        st.session_state["sim_confed_adv_idx"] = ADVANTAGE_DEFAULT_IDX
         if st.session_state.get("sim_user_db"):
             try:
                 st.session_state["sim_user_db"].close()

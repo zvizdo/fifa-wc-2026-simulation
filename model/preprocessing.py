@@ -106,7 +106,7 @@ def calculate_def_rank_shift(def_rank, opp_cur_rank, goals_conceded,
 
 
 def process_tournament_history(df_base, shape=1.5, k_mul=5,
-                               k_off_mul=5, k_def_mul=5, goal_cap=4.0):
+                               k_off_mul=5, k_def_mul=5, goal_cap=4.0, reversion_rate=0.0):
     """Process all tournaments chronologically, computing dynamic features.
 
     For each team within each tournament, tracks:
@@ -136,6 +136,8 @@ def process_tournament_history(df_base, shape=1.5, k_mul=5,
         Multiplier for defensive rank shift k-factor.
     goal_cap : float
         Cap for normalizing goals to [0, 1] in off/def calculations.
+    reversion_rate : float
+        Pulls the dynamic rank back toward the team's base fifa_rank after each update.
 
     Returns
     -------
@@ -193,24 +195,33 @@ def process_tournament_history(df_base, shape=1.5, k_mul=5,
         def_rank_list.append(def_a)
         opp_def_rank_list.append(def_b)
 
+        # Helper to apply mean reversion toward base rank
+        def apply_reversion(val, base_val):
+            return (1.0 - reversion_rate) * val + reversion_rate * base_val
+
+        base_rank_a = float(row["rank"])
+
         # --- Update general rank ---
         result = float(row["win"] + 0.5 * row["draw"])
         gen_shift = calculate_rank_shift(r_a, r_b, result, shape, k_mul)
-        current_ranks[(t_id, t_name)] = max(1.0, round(r_a + gen_shift, 1))
+        new_gen = max(1.0, r_a + gen_shift)
+        current_ranks[(t_id, t_name)] = round(apply_reversion(new_gen, base_rank_a), 1)
 
         # --- Update offensive rank ---
         goals_scored = row["score"]
         off_shift = calculate_off_rank_shift(
             off_a, r_b, goals_scored, shape, k_off_mul, goal_cap
         )
-        offensive_ranks[(t_id, t_name)] = max(1.0, round(off_a + off_shift, 1))
+        new_off = max(1.0, off_a + off_shift)
+        offensive_ranks[(t_id, t_name)] = round(apply_reversion(new_off, base_rank_a), 1)
 
         # --- Update defensive rank ---
         goals_conceded = goals_conceded_map.get(i, 0)
         def_shift = calculate_def_rank_shift(
             def_a, r_b, goals_conceded, shape, k_def_mul, goal_cap
         )
-        defensive_ranks[(t_id, t_name)] = max(1.0, round(def_a + def_shift, 1))
+        new_def = max(1.0, def_a + def_shift)
+        defensive_ranks[(t_id, t_name)] = round(apply_reversion(new_def, base_rank_a), 1)
 
     # Add computed columns
     df_sorted["cur_rank"] = cur_rank_list

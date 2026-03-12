@@ -197,9 +197,8 @@ class ModeledMatch(Match):
     """
 
     def __init__(self, *args, rho=-0.1, **kwargs):
-        # Extract discount multipliers before passing remaining kwargs to super
+        # Extract discount multiplier before passing remaining kwargs to super
         self.host_discount_mul = kwargs.pop("host_discount_mul", 1.0)
-        self.confed_discount_mul = kwargs.pop("confed_discount_mul", 1.0)
         super().__init__(*args, **kwargs)
         self.rho = rho
 
@@ -247,15 +246,24 @@ class ModeledMatch(Match):
         Uses the opponent's current_rank snapshot taken before any updates,
         matching how process_tournament_history records kickoff values first.
 
+        Applies mean reversion toward the team's base fifa_rank to prevent
+        long-term simulation drift.
+
         Args:
             pp: preprocess_params dict from the model artifact.
         """
+        reversion_rate = pp.get("reversion_rate", 0.0)
+        
+        def apply_reversion(val):
+            return (1.0 - reversion_rate) * val + reversion_rate * team.fifa_rank
+
         # General rank shift
         gen_shift = calculate_rank_shift(
             team.current_rank, opp_cur_rank_snapshot,
             result, shape=pp["shape"], k_mul=pp["k_mul"],
         )
-        team.current_rank = max(1.0, round(team.current_rank + gen_shift, 1))
+        new_gen = max(1.0, team.current_rank + gen_shift)
+        team.current_rank = round(apply_reversion(new_gen), 1)
 
         # Offensive rank shift (uses opponent's current general rank at kickoff)
         off_shift = calculate_off_rank_shift(
@@ -263,7 +271,8 @@ class ModeledMatch(Match):
             goals_scored, shape=pp["shape"],
             k_off_mul=pp["k_off_mul"], goal_cap=pp["goal_cap"],
         )
-        team.current_off_rank = max(1.0, round(team.current_off_rank + off_shift, 1))
+        new_off = max(1.0, team.current_off_rank + off_shift)
+        team.current_off_rank = round(apply_reversion(new_off), 1)
 
         # Defensive rank shift (uses opponent's current general rank at kickoff)
         def_shift = calculate_def_rank_shift(
@@ -271,7 +280,8 @@ class ModeledMatch(Match):
             goals_conceded, shape=pp["shape"],
             k_def_mul=pp["k_def_mul"], goal_cap=pp["goal_cap"],
         )
-        team.current_def_rank = max(1.0, round(team.current_def_rank + def_shift, 1))
+        new_def = max(1.0, team.current_def_rank + def_shift)
+        team.current_def_rank = round(apply_reversion(new_def), 1)
 
     def play(self):
         """Simulate the match using the expanded model.
@@ -282,13 +292,11 @@ class ModeledMatch(Match):
         artifact = _load_expanded_model()
         pipeline = artifact["pipeline"]
 
-        # Apply discount multipliers to the transformer if non-default
+        # Apply host discount multiplier to the transformer if non-default
         transformer = pipeline.steps[0][1]  # FullFeatureTransformer
         orig_host = transformer.host_discount
-        orig_confed = transformer.confed_discount
         try:
             transformer.host_discount = orig_host * self.host_discount_mul
-            transformer.confed_discount = orig_confed * self.confed_discount_mul
 
             # Build feature vectors for each team perspective
             home_features = self._build_feature_row(self.home_team, self.away_team)
@@ -300,7 +308,6 @@ class ModeledMatch(Match):
         finally:
             # Restore original values on the cached transformer
             transformer.host_discount = orig_host
-            transformer.confed_discount = orig_confed
 
         # Build probability matrix via vectorized Poisson + inline Dixon-Coles
         prob_matrix = _build_prob_matrix(lambda_home, lambda_away, self.rho)
