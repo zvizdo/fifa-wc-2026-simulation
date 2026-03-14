@@ -25,21 +25,25 @@ def create_outcome_bar_chart(df: pd.DataFrame, team_name: str) -> go.Figure:
     fig.update_traces(
         texttemplate="%{text:.1f}%",
         textposition="outside",
+        hoverinfo="skip",
+        hovertemplate=None,
     )
     fig.update_layout(
-        title=None,
+        title="",
         xaxis_title="Probability (%)",
         yaxis_title=None,
         plot_bgcolor="rgba(0,0,0,0)",
         paper_bgcolor="rgba(0,0,0,0)",
-        margin=dict(l=0, r=40, t=10, b=30),
+        margin=dict(l=0, r=70, t=10, b=30),
+        hovermode=False,
         height=max(250, len(df) * 40),
         font=dict(size=12, color="#374151"), # Darker text for readability
         xaxis=dict(
-            showgrid=True, 
+            showgrid=True,
             gridcolor="#E5E7EB",
             title_font=dict(size=13, color="#111827", weight="bold"),
-            tickfont=dict(color="#374151")
+            tickfont=dict(color="#374151"),
+            range=[0, df["probability"].max() * 1.25],
         ),
         yaxis=dict(
              autorange="reversed",

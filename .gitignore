@@ -223,4 +223,5 @@ __marimo__/
 *.db
 *.pkl
 data/db/
+articles/
 .DS_Store
